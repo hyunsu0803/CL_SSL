@@ -1,0 +1,23 @@
+# torch_start_method: 'fork'
+torch_start_method: 'spawn'
+randomseed: 0
+
+
+resolution: 1
+acc_threshold: 5
+local_maximum_distance: 30
+
+
+model: '/root/mydir/results_final_gunshot_8s/model_checkpoint/best_model.tar'
+# model: '/root/mydir/best_model.tar'
+model_dir: '/root/mydir/results_final_gunshot_8s/model_checkpoint/'
+
+result_folder: 
+  room_type: ['evaluation']
+
+  inference_folder: '/root/mydir/results_final_gunshot_8s/'
+  
+
+
+GPGPU:
+  device_ids: [0]

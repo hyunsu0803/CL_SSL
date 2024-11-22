@@ -1,0 +1,266 @@
+train:
+
+  # speech_dir: /root/mydir/LibriSpeech/train-clean-100/
+  # noise_dir: /root/mydir/MS-SNSD/
+  # vad_dir: /root/mydir/SSL_src/new_prepared/vad/train/
+
+  speech_dir: /root/mydir/miyungpa/gunshot_online/edge-collected-gunshot-audio/
+  noise_dir: /root/mydir/miyungpa/noise_for_demo/     
+  vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_online_010/edge-collected-gunshot-audio/
+  speech_csv: gunshot_online_train.csv
+
+  metadata_dir: /root/mydir/miyungpa/metadata/
+  # speech_dir: /root/mydir/miyungpa/gunshot_real/train/
+  # vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_real/train/
+  # speech_csv: ours_train_answer.csv
+  noise_csv: train_noise_for_demo.csv
+
+  
+  # iteration_num_per_epoch: 200000
+
+  
+  num_spk: 1  # for real DataLoader
+  ans_azi: 0
+  degree_resolution: 1
+
+  dataloader_dict:
+    batch_size: 8 #16
+    shuffle: True
+    num_workers: 16
+    drop_last: True
+
+  mic_type: miyungpa 
+  mic_num: 4 
+  max_n_mic: 4 
+  max_spk: 1
+  speech_least_chunk_size: 176400
+  duration: 352800 # 8s
+
+  SNR: [10, 40]
+  spk_SNR: [-5, 5]
+  white_noise_snr: [30, 70]
+  normalize_factor: [0.004, 1.0]
+ 
+
+  gpu_rir_characteristic: 
+      
+    rt60_bound: [0.4, 1.0]
+    abs_weights_bound: [0.5, 1.0]
+    room_sz_bound: [[15.0, 15.0, 6.0], [45.0, 45.0, 12.0]]
+      
+    azi_gap: 30
+
+    mic:
+      rotation: True
+      mic_type: miyungpa
+      mic_height: [0.7, 1.5]
+      mic_from_wall: 0.2
+
+    ref_vec: 0
+    room:
+      distance: [5, 10] # m
+      azimuth: [0, 360, 1] # start, end, unit # degree
+      elevation: [30, 110, 1]  
+      
+
+    gpu_rir_generate_dict: # input of gpu rir
+      room_sz:
+      beta:
+      pos_src:
+      pos_rcv:
+      nb_img:
+      Tmax:
+      fs: 44100.0
+      c: 343.0
+      orV_rcv:
+      mic_pattern: omni 
+
+
+# synth
+val:
+  loader:
+    # pkl_dir: /root/mydir/SSL_src/prepared/pkl/val/ 
+    # pkl_dir: /root/mydir/miyungpa/prepared/pkl/gunshot_online_441_yes_vad_yes_noise/val/ 
+
+    data_dir: /root/mydir/miyungpa/gunshot_real/train/
+    vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_real/train/
+    data_csv: /root/mydir/miyungpa/metadata/ours_train_answer.csv
+
+    num_spk: 1  # for real DataLoader
+    ans_azi: 0                                        
+    degree_resolution: 1                              
+
+    dataloader_dict:        # essential for real DataLoader
+      batch_size: 1 
+      shuffle: False
+      num_workers: 0 
+      drop_last: True
+
+    mic_type: miyungpa 
+    mic_num: 4 
+    max_n_mic: 4            # in usage
+
+  maker:
+    # pkl_dir: /root/mydir/SSL_src/prepared/pkl/val/
+    # speech_dir: /root/mydir/SiTEC/
+    # noise_dir: /root/mydir/MS-SNSD/noise_test/
+    # vad_dir: /root/mydir/SSL_src/prepared/vad/val_test/
+    # metadata_dir: /root/mydir/SSL_src/metadata/
+    
+    speech_csv: val_sitec.csv
+    noise_csv: val_noise.csv
+    
+    ans_azi: 0                                       
+    degree_resolution: 1                             
+    speech_least_chunk_size: 32000
+    duration: 64000 # 4s
+    white_noise_snr: [5, 70]
+    normalize_factor: [0.004, 1.0]
+    SNR: [0, 40]
+    spk_SNR: [-5, 5]
+    max_spk: 1
+
+    dataloader_dict:        # essential for real DataLoader
+      batch_size: 16 
+      shuffle: False
+      num_workers: 0 
+      drop_last: True
+
+    mic_type: miyungpa 
+    mic_num: 4 
+    max_n_mic: 4            # in usage
+    
+    gpu_rir_characteristic: # on_the_fly.rir_character_dict
+      rt60_bound: [0.4, 1.0]
+      abs_weights_bound: [0.5, 1.0]
+      room_sz_bound: [[14.0, 14.0, 6.0], [46.0, 46.0, 11.0]] 
+        
+      azi_gap: 30
+
+      array_pos: #[[0.1, 0.1, 0.1], [0.9, 0.9, 0.5]]
+        x: [0.1, 0.9]
+        y: [0.1, 0.9]
+        z: [0.1, 0.5]
+      mic:
+        rotation: True
+        mic_type: miyungpa
+        mic_height: [0.3, 10.2]
+        mic_from_wall: 0.2
+
+      ref_vec: 0
+      room:
+        distance: [4, 25] # m
+        azimuth: [0, 360, 1] # start, end, unit # degree
+        elevation: [30, 100, 1]   
+
+      gpu_rir_generate_dict: # on_the_fly.params
+        room_sz:
+        beta:
+        pos_src:
+        pos_rcv:
+        nb_img:
+        Tmax:
+        fs: 16000.0
+        c: 343.0
+        mic_pattern: omni 
+  
+  
+# gunshot 
+test:
+  loader:
+    pkl_dir: /root/mydir/miyungpa/prepared/pkl/gunshot_online_441_yes_vad_yes_noise_8s/test/
+    data_csv: /root/mydir/miyungpa/metadata/gunshot_online_test.csv
+    vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_online_010/
+
+
+    # data_dir: /root/mydir/miyungpa/gunshot_real/test/
+    # vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_real/test/
+    # data_csv: /root/mydir/miyungpa/metadata/ours_test_answer.csv
+
+
+    # vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_real/test/
+    # pkl_dir: /root/mydir/miyungpa/prepared/pkl/gunshot_real/test/
+    
+    # data_csv: /root/mydir/miyungpa/metadata/ours_test.csv
+    noise_csv: /root/mydir/miyungpa/metadata/val_noise_for_demo.csv 
+  
+
+    ans_azi: 0
+    degree_resolution: 1
+    num_spk: 1
+
+    dataloader_dict:
+      batch_size: 1
+      shuffle: False
+      num_workers: 0
+      drop_last: True
+
+    mic_type: miyungpa 
+    mic_num: 4 
+    max_n_mic: 4
+
+  maker: 
+    # speech_dir: /root/mydir/miyungpa/gunshot_real/test/
+    # vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_real/test/
+    # pkl_dir: /root/mydir/miyungpa/prepared/pkl/gunshot_real/test/
+
+    speech_dir: /root/mydir/miyungpa/gunshot_online/edge-collected-gunshot-audio/
+    noise_dir: /root/mydir/miyungpa/noise_for_demo/    
+    metadata_dir: /root/mydir/miyungpa/metadata/
+    vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_online_010/edge-collected-gunshot-audio/
+    pkl_dir: /root/mydir/miyungpa/prepared/pkl/gunshot_online_441_yes_vad_yes_noise_8s/test/
+
+    speech_csv: gunshot_online_test.csv
+    noise_csv: val_noise_for_demo.csv                     
+    
+    ans_azi: 0                                       
+    degree_resolution: 1                             
+    speech_least_chunk_size: 176400
+    duration: 352800 # 8s
+    white_noise_snr: [30, 70]
+    normalize_factor: [0.004, 1.0]
+    SNR: [10, 40]
+    spk_SNR: [-5, 5]
+    max_spk: 1
+
+    dataloader_dict:        # essential for real DataLoader
+      batch_size: 1 
+      shuffle: False
+      num_workers: 0 
+      drop_last: True
+
+    mic_type: miyungpa 
+    mic_num: 4 
+    max_n_mic: 4            # in usage
+    
+    gpu_rir_characteristic: 
+      
+      rt60_bound: [0.4, 0.7]
+      abs_weights_bound: [0.5, 1.0]
+      room_sz_bound: [[15.0, 15.0, 6.0], [25.0, 25.0, 6.0]]
+        
+      azi_gap: 30
+
+      mic:
+        rotation: True
+        mic_type: miyungpa
+        mic_height: [1.0, 1.0]
+        mic_from_wall: 0.2
+
+      ref_vec: 0
+      room:
+        distance: [5, 10] # m
+        azimuth: [0, 360, 1] # start, end, unit # degree
+        elevation: [30, 110, 1]  
+
+
+      gpu_rir_generate_dict: # on_the_fly.params
+        room_sz:
+        beta:
+        pos_src:
+        pos_rcv:
+        nb_img:
+        Tmax:
+        fs: 44100.0
+        c: 343.0
+        mic_pattern: omni
