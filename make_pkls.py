@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import random
 from tqdm import tqdm
-from dataloader.wrap_dataload import Gunshot_datamake
+from dataloader.wrap_dataload import Gunshot_datamake, Speech_datamake
 
 
 class Hyparam_set():
@@ -50,8 +50,8 @@ class Dataloader_config():
         self.args=args
         
     def config(self):
-        # self.val_maker = Val_datamake(self.args['dataloader']['val']['maker'])
-        self.test_maker = Gunshot_datamake(self.args['dataloader']['test']['maker'])
+        self.val_maker = Speech_datamake(self.args['dataloader']['val']['maker'])
+        # self.test_maker = Gunshot_datamake(self.args['dataloader']['test']['maker'])
       
         return self.args   
           
@@ -71,19 +71,18 @@ class Trainer():
     
     def run(self, ):
         
-        # self.validation(0)
-        self.test(0)
+        self.validation(0)
+        # self.test(0)
         
 
     def validation(self, epoch):
 
         with torch.no_grad():
-            
-            # pkl making
-            # val_maker.__getitem__ seems to be called for every iterations
+            n_room = 2
+            self.dataloader.val_maker.dataset.random_room_speech_select(n_room)
             for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.val_maker , desc='Test', total=len(self.dataloader.val_maker), )):
-            #     break
-                continue
+                self.dataloader.val_maker.dataset.random_room_speech_select(n_room)
+                
 
 
     def test(self, epoch):
@@ -98,11 +97,11 @@ class Trainer():
 if __name__=='__main__':
     args=sys.argv[1:]
     
-    args = ['model /root/mydir/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
-            'dataloader /root/mydir/SSL_src/dataloader/data_loader.yaml', 
-            'hyparam /root/mydir/SSL_src/hyparam/train.yaml', 
-            'learner /root/mydir/SSL_src/hyparam/learner.yaml', 
-            'logger /root/mydir/SSL_src/hyparam/logger.yaml']
+    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
+            'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
+            'hyparam /root/clssl/SSL_src/hyparam/train.yaml', 
+            'learner /root/clssl/SSL_src/hyparam/learner.yaml', 
+            'logger /root/clssl/SSL_src/hyparam/logger.yaml']
     
     args=util.util.get_yaml_args(args)
     t=Trainer(args)

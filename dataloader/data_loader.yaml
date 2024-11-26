@@ -79,12 +79,12 @@ train:
 # synth
 val:
   loader:
-    # pkl_dir: /root/mydir/SSL_src/prepared/pkl/val/ 
-    # pkl_dir: /root/mydir/miyungpa/prepared/pkl/gunshot_online_441_yes_vad_yes_noise/val/ 
+    # pkl_dir: /root/clssl/SSL_src/prepared/pkl/val/ 
+    # pkl_dir: /root/clssl/miyungpa/prepared/pkl/gunshot_online_441_yes_vad_yes_noise/val/ 
 
-    data_dir: /root/mydir/miyungpa/gunshot_real/train/
-    vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_real/train/
-    data_csv: /root/mydir/miyungpa/metadata/ours_train_answer.csv
+    data_dir: /root/clssl/miyungpa/gunshot_real/train/
+    vad_dir: /root/clssl/miyungpa/prepared/vad/gunshot_real/train/
+    data_csv: /root/clssl/miyungpa/metadata/ours_train_answer.csv
 
     num_spk: 1  # for real DataLoader
     ans_azi: 0                                        
@@ -101,11 +101,11 @@ val:
     max_n_mic: 4            # in usage
 
   maker:
-    # pkl_dir: /root/mydir/SSL_src/prepared/pkl/val/
-    # speech_dir: /root/mydir/SiTEC/
-    # noise_dir: /root/mydir/MS-SNSD/noise_test/
-    # vad_dir: /root/mydir/SSL_src/prepared/vad/val_test/
-    # metadata_dir: /root/mydir/SSL_src/metadata/
+    pkl_dir: /root/clssl/SSL_src/prepared/pkl/val/
+    speech_dir: /root/clssl/SiTEC/
+    noise_dir: /root/clssl/MS-SNSD/noise_test/
+    vad_dir: /root/clssl/SSL_src/prepared/vad/val_test/
+    metadata_dir: /root/clssl/SSL_src/metadata/
     
     speech_csv: val_sitec.csv
     noise_csv: val_noise.csv

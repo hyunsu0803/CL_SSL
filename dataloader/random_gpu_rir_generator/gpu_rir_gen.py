@@ -142,14 +142,10 @@ class acoustic_simulator_on_the_fly(simulator_common):
 
     def random_room_select(self):
 
-        room_param={}
-
         room_sz_bound=self.rir_character_dict['room_sz_bound']
         room_sz=self.get_random_value(room_sz_bound)
-        room_param['L']=room_sz
         
         rt60=np.random.uniform(*self.rir_character_dict['rt60_bound'])
-        room_param['reverberation_time']=rt60
         abs_weight=np.random.uniform(*self.rir_character_dict['abs_weights_bound'], size=6)      
        
         return room_sz, rt60, abs_weight
@@ -395,16 +391,6 @@ class acoustic_simulator_on_the_fly(simulator_common):
         self.params['pos_src']=np.stack(speech_pos_list, axis=0)
  
         return self.params, target_mic_rotated_pos, azi_pos, linear_azi_pos
-    
-    # def room_choice_from_dict(self, room_dict):
-    #     room_type=random.choice(list(room_dict.keys()))
-    #     room_type=room_dict[room_type]
-    #     room_sz=room_type['L']
-    #     rt60=room_type['reverberation_time']
-    #     att_max=room_type['att_max']
-    #     att_diff=room_type['att_diff']
-    #     abs_weight=0.5*np.ones(6)
-    #     return room_sz, rt60, att_diff, att_max, abs_weight
 
 
     def create_rir(self,num_spk=1, with_coherent_noise=True, mic_type='miyungpa', mic_num=4): 
@@ -415,60 +401,6 @@ class acoustic_simulator_on_the_fly(simulator_common):
 
         return rirs, mic_pos, azi_list, linear_azi_pos_list
     
-    
-    
-    # def mic_select(self):
-    #     n_mic=random.choice(self.rir_character_dict['mic']['mic_num']) # number of mic         
-    #     mic_shape=random.choice(self.rir_character_dict['mic']['mic_shape']) # mic shape
 
-    #     mic_pos=self.mic_pos_dict[mic_shape][n_mic]/100 # cm to m
-    #     return mic_pos, n_mic
-    
-    
-    # def get_theta_mic_center(self, ):
-    #     theta=random.uniform(0, 2*math.pi)
-    #     theta=np.rad2deg(theta)
-
-    #     mic_height=random.uniform(*self.rir_character_dict['mic']['mic_height'])
-   
-    #     mic_loc_x_range=self.params['room_sz'][0]/2-self.rir_character_dict['mic']['mic_from_wall']
-    #     mic_loc_x_range=[-mic_loc_x_range, mic_loc_x_range]
-    #     mic_loc_x=random.uniform(*mic_loc_x_range) + self.params['room_sz'][0]/2
-
-    #     mic_loc_y_range=self.params['room_sz'][1]/2-self.rir_character_dict['mic']['mic_from_wall']
-    #     mic_loc_y_range=[-mic_loc_y_range, mic_loc_y_range]
-    #     mic_loc_y=random.uniform(*mic_loc_y_range) + self.params['room_sz'][1]/2
-
-    #     mic_center=np.array([mic_loc_x, mic_loc_y, mic_height])
-
-    #     return theta, mic_center
-    
-    
-    # def create_param_test(self, room_dict):
-    #     room_sz, rt60, att_diff, att_max, abs_weight = self.room_choice_from_dict(room_dict)
-       
-
-        
-    #     self.gpu_rir_param(room_sz, rt60, abs_weight, att_diff, att_max)
-       
-
-
-    #     theta, mic_center=self.get_theta_mic_center()
-     
-  
-
-    #     azi_pos=[]
-    #     speech_pos_list=[]
-
-        
-
-    #     for i in range(2):
-    #         speech_pos, azi=self.get_source_pos(theta, azi_pos, mic_center, room_sz)
-    #         speech_pos_list.append(speech_pos)
-    #         azi_pos.append(azi)
-
-    #     self.params['pos_src']=np.stack(speech_pos_list, axis=0)
-        
-    #     return self.params, theta, mic_center
      
         

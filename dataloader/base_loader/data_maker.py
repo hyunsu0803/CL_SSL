@@ -207,13 +207,23 @@ class base_data_maker(datamake):
         vad=np.load(vad_name)
 
         return self.speech_get_wav(wav_path, vad)
+    
+    
+    def random_room_speech_select(self, n_room):
+        
+        speech_info=self.speech_csv.sample(n=n_room)   
+        self.rooms = []
+        for n in range(n_room):
+            room_sz, rt60, abs_weight = self.rir_maker.random_room_select()
+            self.rooms.append({'room_sz': room_sz, 'rt60': rt60, 'abs_weight': abs_weight, 'speech_info': speech_info.iloc[n]})
 
 
     def __len__(self):
-        return len(self.speech_csv)
+        # return len(self.speech_csv)
+        return 360
 
 
-    def make_data(self, idx, with_coherent_noise=True):
+    def make_data(self, azimuth_deg, with_coherent_noise=True):
 
         num_spk=random.randint(1, self.max_num_people) 
         
@@ -244,7 +254,7 @@ class base_data_maker(datamake):
         vad_list=[]
         speech_start_point_list=[]
         
-        speech_info=self.select_different_speakers(self.speech_csv.iloc[idx:idx+1], num_spk)    # num_spk=1
+        speech_info=self.select_different_speakers(self.speech_csv.iloc[azimuth_deg:azimuth_deg+1], num_spk)    # num_spk=1
 
         # only 1 iterration
         for spk_num, spk_info in enumerate(speech_info.iterrows()):
@@ -302,7 +312,8 @@ class base_data_maker(datamake):
     
     
     def __getitem__(self, idx):
-        return self.make_data(idx)
+        azimuth_deg = idx
+        return self.make_data(azimuth_deg)
 
     
     
