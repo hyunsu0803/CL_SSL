@@ -1,4 +1,4 @@
-from .base_loader.data_maker import train_data_maker, speech_data_maker, gunshot_data_maker
+from .base_loader.data_maker import train_data_maker, speech_data_maker, gunshot_data_maker, base_data_maker
 from .base_loader.data_loader import synth_data_loader, real_data_loader
 
 from torch.utils.data import DataLoader 

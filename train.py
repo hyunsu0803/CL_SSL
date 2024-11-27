@@ -170,8 +170,8 @@ class Learner_config():
 
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
-        # self.model_select()     # set self.model
-        self.model_select_for_finetune()
+        self.model_select()     # set self.model
+        # self.model_select_for_finetune()
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()
@@ -292,10 +292,9 @@ class Dataloader_config():
         
     def config(self):
         
-        # self.train_loader=Real_dataload(self.args['dataloader']['train'])
-        self.val_loader=Real_dataload(self.args['dataloader']['val']['loader'])
-        self.train_loader=Train_dataload(self.args['dataloader']['train'], self.args['hyparam']['randomseed']) 
-
+        self.train_loader=Train_dataload(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
+        self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])
+        
         return self.args   
         
         
@@ -336,10 +335,21 @@ class Trainer():
             
             self.logger.epoch_finish(epoch, self.model, self.optimizer)
             
-            # cont = input("Continue? (y/n) ")
-            # if cont.lower() == "n":
-            #     break
-
+           
+    def permute_n_augment(self, mixed, vad, speech_azi):
+        
+        mixed = mixed.reshape(-1, mixed.shape[-2], mixed.shape[-1])
+        vad = vad.reshape(-1, vad.shape[-2], vad.shape[-1])
+        speech_azi = speech_azi.reshape(-1, speech_azi.shape[-1])
+            
+        perm = torch.randperm(mixed.size(0))  # 무작위 인덱스 생성 (size : 128)
+        
+        mixed = mixed.index_select(0, perm)  
+        vad = vad.index_select(0, perm)  
+        speech_azi = speech_azi.index_select(0, perm)
+        
+        return mixed, vad, speech_azi
+    
 
     def train(self, epoch):
 
@@ -347,12 +357,20 @@ class Trainer():
         self.optimizer.zero_grad()
 
         mic_type=self.args['dataloader']['train']['mic_type']
-        # mixed : (16, 4, 64000)
-        # vad : (16, 1, 64000)
-        # speech_azi : (16, 1)
-        # num_spk : (16)
-        for iter_num, (mixed, vad, speech_azi, num_spk, fs) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
-
+        
+        
+        
+        n_room = 8
+        self.dataloader.train_loader.dataset.random_room_speech_select(n_room)
+        for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+            # mixed : [64, 2, 4, 64000]
+            # vad : [64, 2, 1, 64000]
+            # speech_azi : [64, 2, 1]
+            mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
+            # mixed : [128, 4, 64000]   # 512 되어야 함
+            # vad : [128, 1, 64000]
+            # speech_azi : [128, 1]
+            
             mixed=mixed.to(self.hyperparameter.device)
             vad=vad.to(self.hyperparameter.device)
             speech_azi=speech_azi.to(self.hyperparameter.device)
@@ -363,6 +381,8 @@ class Trainer():
 
             self.logger.train_iter_log(loss)
             self.learner.memory_delete([mixed, vad, speech_azi, out, target, loss])
+            
+            self.dataloader.train_loader.dataset.random_room_speech_select(n_room)
         
         self.logger.train_epoch_log()
 
@@ -396,11 +416,11 @@ class Trainer():
 if __name__=='__main__':
     args=sys.argv[1:]
     
-    args = ['model /root/mydir/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
-            'dataloader /root/mydir/SSL_src/dataloader/data_loader.yaml', 
-            'hyparam /root/mydir/SSL_src/hyparam/train.yaml', 
-            'learner /root/mydir/SSL_src/hyparam/learner.yaml', 
-            'logger /root/mydir/SSL_src/hyparam/logger.yaml']
+    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
+            'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
+            'hyparam /root/clssl/SSL_src/hyparam/train.yaml', 
+            'learner /root/clssl/SSL_src/hyparam/learner.yaml', 
+            'logger /root/clssl/SSL_src/hyparam/logger.yaml']
     
     args=util.util.get_yaml_args(args)
     t=Trainer(args)

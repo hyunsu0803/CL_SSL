@@ -80,7 +80,7 @@ class Trainer():
         with torch.no_grad():
             n_room = 2
             self.dataloader.val_maker.dataset.random_room_speech_select(n_room)
-            for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.val_maker , desc='Test', total=len(self.dataloader.val_maker), )):
+            for iter_num, (mixed, vad, speech_azi, num_spk, fs, white_noise_snr) in enumerate(tqdm(self.dataloader.val_maker , desc='Test', total=len(self.dataloader.val_maker), )):
                 self.dataloader.val_maker.dataset.random_room_speech_select(n_room)
                 
 

@@ -199,10 +199,10 @@ class base_data_maker(datamake):
 
     def main_speech_load(self, speech_info):
         
-        wav_path = self.speech_dir + speech_info['filename']
+        wav_path = self.speech_dir + speech_info['audio_path']
 
-        ftype = '.' + speech_info['filename'].split('.')[-1]
-        vad_name = self.vad_dir + speech_info['filename'].replace(ftype, '.npy')
+        ftype = '.' + speech_info['audio_path'].split('.')[-1]
+        vad_name = self.vad_dir + speech_info['audio_path'].replace(ftype, '.npy')
 
         vad=np.load(vad_name)
 
@@ -215,7 +215,7 @@ class base_data_maker(datamake):
         self.rooms = []
         for n in range(n_room):
             room_sz, rt60, abs_weight = self.rir_maker.random_room_select()
-            self.rooms.append({'room_sz': room_sz, 'rt60': rt60, 'abs_weight': abs_weight, 'speech_info': speech_info.iloc[n]})
+            self.rooms.append({'room_sz': room_sz, 'rt60': rt60, 'abs_weight': abs_weight, 'speech_info': speech_info.iloc[n:n+1]})
 
 
     def __len__(self):
@@ -223,14 +223,18 @@ class base_data_maker(datamake):
         return 360
 
 
-    def make_data(self, azimuth_deg, with_coherent_noise=True):
-
+    def make_data(self, room_info, azimuth_deg, with_coherent_noise=False):
+        # 방 2개에 해당하는 rir 생성
         num_spk=random.randint(1, self.max_num_people) 
         
-        rirs, mic_pos, azi_list, linear_azi_list = self.rir_maker.create_rir(num_spk=num_spk, 
-                                                                             with_coherent_noise=with_coherent_noise, 
-                                                                             mic_type=self.args['mic_type'], 
-                                                                             mic_num=self.args['mic_num'])
+        
+        rirs, azi_list = self.rir_maker.create_rir(num_spk=num_spk, 
+                                                with_coherent_noise=with_coherent_noise, 
+                                                mic_type=self.args['mic_type'], 
+                                                mic_num=self.args['mic_num'],
+                                                room_info=room_info,
+                                                azimuth_deg=azimuth_deg)
+            
  
         coherent_noise_snr=None
         rired_noise_wav=None
@@ -254,8 +258,8 @@ class base_data_maker(datamake):
         vad_list=[]
         speech_start_point_list=[]
         
-        speech_info=self.select_different_speakers(self.speech_csv.iloc[azimuth_deg:azimuth_deg+1], num_spk)    # num_spk=1
-
+        speech_info = room_info['speech_info']
+        
         # only 1 iterration
         for spk_num, spk_info in enumerate(speech_info.iterrows()):
             
@@ -308,13 +312,35 @@ class base_data_maker(datamake):
         # vad & azi_list == torch.tensor
         vad, azi_list=self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)
         
-        return torch.from_numpy(mixed), vad, azi_list, num_spk, fs
+        return torch.from_numpy(mixed), vad, azi_list, num_spk, fs, white_noise_snr
+    
+    def arrange_data(self, idx):
+        azimuth_deg = idx
+        
+        mixed_list = []
+        vad_list = []
+        white_noise_snr_list = []
+        azi_list_list = []
+        
+        for room_info in self.rooms:
+            # tensor, tensor, tensor,   int, int, float     # tensor는 model에 들어감
+            mixed, vad, azi_list,       num_spk, fs, white_noise_snr = self.make_data(room_info, azimuth_deg, with_coherent_noise=False)
+            mixed_list.append(mixed)
+            vad_list.append(vad)
+            azi_list_list.append(azi_list)
+            white_noise_snr_list.append(white_noise_snr)
+        
+        mixed = torch.stack(mixed_list)
+        vad = torch.stack(vad_list)
+        azi_list = torch.stack(azi_list_list)
+        
+        
+        return mixed, vad, azi_list, white_noise_snr_list
     
     
     def __getitem__(self, idx):
-        azimuth_deg = idx
-        return self.make_data(azimuth_deg)
-
+        # print(idx, end=' ')
+        return self.arrange_data(idx)
     
     
 class train_data_maker(base_data_maker):
@@ -334,15 +360,20 @@ class speech_data_maker(base_data_maker):
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, num_spk, fs = self.make_data(idx)
+        mixed, vad, azi_list, white_noise_snr_list = self.arrange_data(idx)
+        
         save_dict={}
-        save_dict['noisy']=mixed
-        save_dict['vad']=vad
-        save_dict['azi']=azi_list
-        save_dict['num_spk']=num_spk
-        save_dict['fs']=fs
-
-        pkl_name=self.pkl_dir+str(idx)+'.pkl'
+        save_dict['noisy']=mixed    # tensor
+        save_dict['vad']=vad        # tensor
+        save_dict['azi']=azi_list[0]   # tensor
+        save_dict['white_noise_snr_list']=white_noise_snr_list  # list
+        
+        pkl_name = list(azi_list[0].numpy()) + white_noise_snr_list
+        pkl_name = [str(int(i)) for i in pkl_name]
+        pkl_name = '_'.join(pkl_name) + '.pkl'
+        pkl_name = self.pkl_dir + pkl_name
+        
+        
         output=open(pkl_name, 'wb')
         pickle.dump(save_dict, output)
         output.close()

@@ -1,4 +1,4 @@
-,audio_directory,speaker,gender,length,Dict_n
+,audio_path,speaker,gender,length,Dict_n
 0,sitec/Dict01/clncut/female/fcn3lms00s110/set110070_clncut.wav,fcn3lms00s110,female,47872,dict01
 1,sitec/Dict01/clncut/female/fcn3lms00s110/set110016_clncut.wav,fcn3lms00s110,female,50816,dict01
 2,sitec/Dict01/clncut/female/fcn3lms00s110/set110097_clncut.wav,fcn3lms00s110,female,61568,dict01

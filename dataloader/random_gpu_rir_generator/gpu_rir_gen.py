@@ -217,7 +217,7 @@ class acoustic_simulator_on_the_fly(simulator_common):
         return theta, mic_rotated_pos, mic_center
     
 
-    def get_source_pos(self, theta, azi_pos, linear_azi_pos, mic_center, room_sz):
+    def get_source_pos(self, theta, azi_pos, linear_azi_pos, mic_center, room_sz, azi_deg):
 
         while True:
             r=random.uniform(*self.rir_character_dict['room']['distance']) # distance from mic
@@ -226,7 +226,7 @@ class acoustic_simulator_on_the_fly(simulator_common):
 
             while True:
                 
-                azi_deg=random.randrange(*self.rir_character_dict['room']['azimuth'])
+                # azi_deg=random.randrange(*self.rir_character_dict['room']['azimuth'])
               
                 if len(azi_pos)==0:
                     break
@@ -256,13 +256,13 @@ class acoustic_simulator_on_the_fly(simulator_common):
              
             azi_fluctuation=0.0
             
-            azi=np.deg2rad(azi_deg+theta+azi_fluctuation+self.rir_character_dict['ref_vec'])
+            azi_rad=np.deg2rad(azi_deg+theta+azi_fluctuation+self.rir_character_dict['ref_vec'])
             
             ele=random.uniform(*self.rir_character_dict['room']['elevation'][:2])
             ele=np.deg2rad(ele)
 
-            x=r*np.sin(ele)*np.cos(azi)
-            y=r*np.sin(ele)*np.sin(azi)
+            x=r*np.sin(ele)*np.cos(azi_rad)
+            y=r*np.sin(ele)*np.sin(azi_rad)
             z=r*np.cos(ele)
          
             speech_pos=mic_center+ np.array([x,y,z])
@@ -312,9 +312,11 @@ class acoustic_simulator_on_the_fly(simulator_common):
         return speech_pos, azi_deg
     
 
-    def create_param(self, num_spk, with_coherent_noise, mic_type, mic_num):
+    def create_param(self, num_spk, with_coherent_noise, mic_type, mic_num, room_info, azimuth_deg):
         
-        room_sz, rt60, abs_weight=self.random_room_select()    
+        room_sz, rt60, abs_weight = room_info['room_sz'], room_info['rt60'], room_info['abs_weight']
+        
+        self.gpu_rir_param(room_sz, rt60, abs_weight)   # room_sz, beta, Tdiff, Tmax, nb_img setting
         
         whole_mic_setup = self.whole_mic_setup
         
@@ -362,44 +364,42 @@ class acoustic_simulator_on_the_fly(simulator_common):
         
         n_mic = target_mic_original_pos.shape[0]
         
-        self.gpu_rir_param(room_sz, rt60, abs_weight)   # room_sz, beta, Tdiff, Tmax, nb_img setting
-
         theta, target_mic_rotated_pos, mic_center= self.mic_rotate_location(target_mic_original_pos, n_mic, room_sz, mic_orV)
         
-        azi_pos=[]
+        azi_list=[]
         linear_azi_pos=[]
         speech_pos_list=[]
         
         for i in range(num_spk):
-            speech_pos, azi=self.get_source_pos(theta, azi_pos, linear_azi_pos, mic_center, room_sz)
+            speech_pos, azi_deg=self.get_source_pos(theta, azi_list, linear_azi_pos, mic_center, room_sz, azimuth_deg)
             speech_pos_list.append(speech_pos)
-            azi_pos.append(azi)
-            if azi>180:
-                gp=azi-180
+            azi_list.append(azi_deg)
+            if azi_deg>180:
+                gp=azi_deg-180
                 linear_azi_pos.append(180-gp)
             else:
-                linear_azi_pos.append(azi)
+                linear_azi_pos.append(azi_deg)
   
         
         if with_coherent_noise:
             
-            noise_pos, azi=self.get_noise_source_pos(theta, azi_pos, mic_center, room_sz)
+            noise_pos, azi_deg=self.get_noise_source_pos(theta, azi_list, mic_center, room_sz)
         
             speech_pos_list.append(noise_pos)
-            azi_pos.append(azi)
+            azi_list.append(azi_deg)
      
         self.params['pos_src']=np.stack(speech_pos_list, axis=0)
  
-        return self.params, target_mic_rotated_pos, azi_pos, linear_azi_pos
+        return self.params, azi_list
 
 
-    def create_rir(self,num_spk=1, with_coherent_noise=True, mic_type='miyungpa', mic_num=4): 
+    def create_rir(self, num_spk=1, with_coherent_noise=True, mic_type='miyungpa', mic_num=4, room_info=None, azimuth_deg=None): 
         
-        self.params, mic_pos, azi_list, linear_azi_pos_list=self.create_param(num_spk, with_coherent_noise, mic_type, mic_num)
+        self.params, azi_list = self.create_param(num_spk, with_coherent_noise, mic_type, mic_num, room_info, azimuth_deg)
   
         rirs = gpuRIR.simulateRIR(**self.params)    
 
-        return rirs, mic_pos, azi_list, linear_azi_pos_list
+        return rirs, azi_list
     
 
      
