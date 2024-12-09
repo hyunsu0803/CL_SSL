@@ -100,7 +100,7 @@ class ConvSTFT(nn.Module):
         
 
     def forward(self, inputs, vad, cplx=True):
-        
+        # inputs: B x C x T
         if inputs.dim() == 2:
             # N x 1 x L
             inputs = torch.unsqueeze(inputs, 1)

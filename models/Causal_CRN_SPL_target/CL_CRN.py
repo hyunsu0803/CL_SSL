@@ -62,125 +62,104 @@ class crn(nn.Module):
         
         self.cnn_num=config['CNN']['layer_num']
         self.kernel_size=config['CNN']['kernel_size']
-        self.filter_size=config['CNN']['filter']        
+        self.filter_size=config['CNN']['filter']            # 64
 
-        self.max_pool_kernel=config['CNN']['max_pool']['kernel_size']
-        self.max_pool_stride=config['CNN']['max_pool']['stride']
+        self.max_pool_kernel=config['CNN']['max_pool']['kernel_size']   # [2,1]
+        self.max_pool_stride=config['CNN']['max_pool']['stride']        # [2,1]
 
-        # args = [2*(config['input_audio_channel']-1),  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
-        args = [6,  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
+        args = [2*(config['input_audio_channel']-1),  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
        
-        # kwargs={'stride': 1, 'padding': [1,2], 'dilation': 1}
         kwargs = {'stride': 1, 'padding': (self.kernel_size[0] // 2, self.kernel_size[1] // 2), 'dilation': 1}
 
       
 
-
+        ##############################
+        # CNN layer
+        ##############################
         self.cnn=nn.ModuleList()
         self.pooling=nn.ModuleList()
         self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))       # (2*(C-1), 64, [3,3])
         self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
 
-        args[0]=config['CNN']['filter']                             # (64, 64, [3,3])
+        args[0]=config['CNN']['filter']                             # (64, 64, [3,3])   in_channel 변경
         for count in range(self.cnn_num-1):
             self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))
             self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
     
-        self.GRU_layer=nn.GRU(**config['GRU'])                      # bidirectional=True      
+    
+    
+        ##############################
+        # GRU layer
+        ##############################
         # self.h0=torch.zeros(*config['GRU_init']['shape'])
+        self.GRU_layer=nn.GRU(**config['GRU'])                      # bidirectional=True      
         
-        # Bidirectional GRU를 위한 h0 차원 수정
         num_layers = config['GRU_init']['shape'][0]  # 3
         hidden_size = config['GRU_init']['shape'][-1]  # 256
 
-        # bidirectional을 고려하여 h0의 shape 변경
         self.h0 = torch.zeros(num_layers * 2, 1, hidden_size)  # [6, 1, 256]
         self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
         
 
-        self.azi_mapping_conv_layer=nn.ModuleList()
-        self.azi_mapping_final=nn.ModuleList()
 
-        # (B, 512, 690) => (B, 360)
-        # args[0] = 690  # input channel
-        # args[1] = 32    # output channel
-        # args[2] = (3, 3)          # kernel size      
-        # kwargs['padding'] = (0, 0)
-        # self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        # self.azi_mapping_final.append(nn.Conv2d(args[1], self.azi_size, (1, 1)))
+        ##############################
+        # output layer
+        ##############################
+        self.Conv1D_Block_layer=nn.ModuleList()
         
-        # args[0]=32     #   input channel
-        # args[1]=32     #   output channel
-        # for _ in range(output_num-1):
-        #     self.azi_mapping_conv_layer.append(Conv2D_Block(*args, **kwargs))
-        #     self.azi_mapping_final.append(nn.Conv2d(args[1], self.azi_size, (1, 1)))
+        kwargs['padding']=0
+        args = [512, 256, 3]  # in_channels, out_channels, kernel_size
+        self.Conv1D_Block_layer.append(Conv1D_Block(*args, **kwargs))
         
-        kwargs['padding'] = 0
-        args[0] = 690
-        args[1] = 64
-        args[2] = 1
-        # args1 = [690, 64, 1]    # in_channel, out_channel, kernel size
-        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        args[0] = 64
-        args[1] = 1
-        args[2] = 1
-        # args2 = [64, 1, 1]
-        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        self.azi_mapping_final.append(nn.Conv1d(in_channels=512, out_channels=self.azi_size, kernel_size=1, padding=0))
+        args = [256, 128, 3]
+        self.Conv1D_Block_layer.append(Conv1D_Block(*args, **kwargs))
         
-        args[0] = 512
-        args[1] = 512
-        args[2] = 1
-        # args3 = [512, 512, 1]
-        for _ in range(output_num-1):
-            self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-            self.azi_mapping_final.append(nn.Conv1d(in_channels=512, out_channels=self.azi_size, kernel_size=1, padding=0))
-     
+        args = [128, 64, 3]
+        self.Conv1D_Block_layer.append(Conv1D_Block(*args, **kwargs))
+        
+        args = [64, 32, 3]
+        self.Conv1D_Block_layer.append(Conv1D_Block(*args, **kwargs))
+
+        # Final linear transformation to (32, 32)
+        self.feat_mapping_final = nn.Conv1d(in_channels=493, out_channels=32, kernel_size=1, padding=0)
+    
      
 
     def forward(self, x):
-      
+        
+        ##############################
+        # CNN layer
+        ##############################
+        # x: (B, 6, 26, 501)
         for cnn_layer, pooling_layer in zip(self.cnn, self.pooling):
-            x=cnn_layer(x)[...,:x.shape[-1]]
-            x=pooling_layer(x)
- 
-        
-        b, c, f, t=x.shape              # (B, 64, 3, 690)
-        x=x.view(b, -1, t).permute(0,2,1)
+            x=cnn_layer(x)[...,:x.shape[-1]]    # (B, 64, 26, 501)  (B, 64, 13, 501)    (B, 64, 6, 501)
+            x=pooling_layer(x)                  # (B, 64, 13, 501)  (B, 64, 6, 501)    (B, 64, 3, 501)
 
-        h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  # h0 : (2*num_layers, B, hidden_size)
         
+        ##############################
+        # GRU layer
+        ##############################
+        b, c, f, t = x.shape                  # (mB, 64, 3, 501)
+        x = x.view(b, -1, t).permute(0,2,1)   # (mB, 501, 192)
+
+        h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  # h0 : (2*gru_num_layers, B, hidden_size) (4, mB, 256)
         self.GRU_layer.flatten_parameters()
         
-        x, h=self.GRU_layer(x, h0)      # (B, t, 256(hidden size))
-        # x=x.permute(0,2,1)              # (B, 512, 690)
-        outputs=[]
+        x, h=self.GRU_layer(x, h0)      # (mB, 501, 512(hidden size))
+        x=x.permute(0,2,1)              # (B, 512, 501)
+
         
+        ##############################
+        # output layer
+        ##############################
+        for cnn_layer in self.Conv1D_Block_layer:
+            x = cnn_layer(x)  # Reduce along the time axis (B, 256, 499), (B, 128, 497), (B, 64, 495), (B, 32, 493)
         
+        x = x.permute(0, 2, 1)  # (B, 32, time) -> (B, time, 32)
+
+        x = self.feat_mapping_final(x)  # (B, 32, 32)
         
-        ### time axis compression
-        #                        x.shape: (B, 690, 512)
-        cnn_layer=self.azi_mapping_conv_layer[0]
-        x=cnn_layer(x)                  # (B, 64, 512)
-        cnn_layer=self.azi_mapping_conv_layer[1]
-        x=cnn_layer(x)                  # (B, 1, 512)
-        
-        
-        x=x.permute(0,2,1)              # (B, 512, 1)
-        
-        ### channel axis compression
-        final_layer=self.azi_mapping_final[0]
-        res_output=final_layer(x)       # (B, 360, 1)
-        outputs.append(res_output.squeeze(-1))
-        
-        for cnn_layer, final_layer in zip(self.azi_mapping_conv_layer[2:], self.azi_mapping_final[1:]):
-            x=cnn_layer(x)              # (B, 512, 1)           
-            res_output=final_layer(x)   # (B, 360, 1)
-            outputs.append(res_output.squeeze(-1))
-            
-        output=torch.stack(outputs).permute(1,0,2)  # (3, B, 360) -> (B, 3, 360)
-        
-        return output
+        return x
 
 
 
@@ -262,43 +241,38 @@ class main_model(nn.Module):
                     return 
 
     
-    def make_target(self, vad_frame, azi, iter_num, epoch):
+    def make_weight(self, azi):
         
-        azi_target=torch.div(azi, 360//self.azi_size, rounding_mode='floor').long()        
-        azi_range=torch.arange(0, self.azi_size).unsqueeze(0).to(azi_target.device)
+        azi_target=torch.div(azi, 360//self.azi_size, rounding_mode='floor').long()     # (B, 1)
+        azi_range=torch.arange(0, self.azi_size).unsqueeze(0).to(azi_target.device)     # (1, 360)
 
-        distance=azi_target.unsqueeze(-1)*self.degree_resolution-azi_range*self.degree_resolution
+        distance=azi_target.unsqueeze(-1)*self.degree_resolution-azi_range*self.degree_resolution   # (B, 1, 360) = (B, 1, 1) - (1, 360)
         
         distance_abs=torch.abs(distance)
-        distance_abs=torch.stack((distance_abs, 360-distance_abs), dim=0)
+        distance_abs=torch.stack((distance_abs, 360-distance_abs), dim=0)       # distance_abs : (2, B, 1, 360)
      
-        distance=torch.min(distance_abs, dim=0).values
-        distance=torch.deg2rad(distance).unsqueeze(1)
+        distance=torch.min(distance_abs, dim=0).values                          # distance : (B, 1, 360)
+        distance=torch.deg2rad(distance).unsqueeze(1)                           # distance : (B, 1, 1, 360)
         
-        sigma=self.sigma.view(1,-1, 1,1).to(distance.device)
+        sigma=self.sigma.view(1,-1, 1,1).to(distance.device)                    # (1, 3, 1, 1)
         sigma=torch.deg2rad(sigma)
-        kappa_d=torch.log(self.p)/(torch.cos(sigma)-1)
+        kappa_d=torch.log(self.p)/(torch.cos(sigma)-1)                          # (1, 3, 1, 1)
         
 
-        labelling=torch.exp(kappa_d*(torch.cos(distance)-1)).unsqueeze(-1) # batch, number of sigma, number of speakers, time, 1  
+        labelling=torch.exp(kappa_d*(torch.cos(distance)-1)).unsqueeze(-1)      # (B, 3, 1, 360, 1)  
         
+        return labelling
 
-        vad_frame=vad_frame.unsqueeze(1).unsqueeze(-2)
-        
-        vad_frame=labelling*vad_frame
-    
-        vad_frame=torch.max(vad_frame, dim=2).values
+        # self.sigma_update(iter_num, epoch)
        
-        self.sigma_update(iter_num, epoch)
-       
-        return vad_frame # batch, sigma_num, degree, frame
+
     
 
     def irtf_feature(self, mixed, vad):  
         r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
-        # B x C x F x T = (B, 4, 513, 345)
+        # B x C x F x T = (B, 4, 129, 501)
         comp = torch.complex(r, i)
-        # comp = comp[:, :, :26, :]
+        comp = comp[:, :, :26, :]
         
         comp_ref = comp[..., [self.ref_ch], :, :]
         comp_ref = torch.complex(
@@ -308,7 +282,7 @@ class main_model(nn.Module):
         comp=torch.cat(
         (comp[..., self.ref_ch-1:self.ref_ch, :, :], comp[..., self.ref_ch+1:, :, :]),
         dim=-3) / comp_ref
-        feature=torch.cat((comp.real, comp.imag), dim=1)
+        feature=torch.cat((comp.real, comp.imag), dim=1)    # (B, 6, 129, 501)
         
         
         # (B, 2*(C-1), F, T), (B, F, T)
@@ -341,57 +315,38 @@ class main_model(nn.Module):
         return gcc_feat, vad_frame
 
 
-    def vad_framing(self, vad_batch):
+    # def vad_framing(self, vad_batch):
 
-        vad_output_th = vad_batch.mean(axis=2) > 2 / 3
+    #     vad_output_th = vad_batch.mean(axis=2) > 2 / 3
         
-        vad_output_th = vad_output_th[:, np.newaxis, :, np.newaxis, np.newaxis]
-        vad_output_th = torch.from_numpy(vad_output_th.astype(float)).to(maps.device)
-        repeat_factor = np.array(maps.shape)
-        repeat_factor[:-2] = 1
-        maps *= vad_output_th.float().repeat(repeat_factor.tolist())
+    #     vad_output_th = vad_output_th[:, np.newaxis, :, np.newaxis, np.newaxis]
+    #     vad_output_th = torch.from_numpy(vad_output_th.astype(float)).to(maps.device)
+    #     repeat_factor = np.array(maps.shape)
+    #     repeat_factor[:-2] = 1
+    #     maps *= vad_output_th.float().repeat(repeat_factor.tolist())
 
     
-    def target_flip(self, target):
+    # def target_flip(self, target):
 
   
 
-        target_flipped=torch.flip(target, dims=[2])
-        target_flipped=torch.roll(target_flipped, dims=2, shifts=1)
-        target_cat=torch.stack([target_flipped, target], dim=0)
-        target=torch.max(target_cat, dim=0).values
+    #     target_flipped=torch.flip(target, dims=[2])
+    #     target_flipped=torch.roll(target_flipped, dims=2, shifts=1)
+    #     target_cat=torch.stack([target_flipped, target], dim=0)
+    #     target=torch.max(target_cat, dim=0).values
 
  
-        return target
+    #     return target
 
         
     def forward(self, mixed, vad, azi, iter_num, epoch, mic_type, LOCATA=False):
         ###### irtf feature extraction  (B, 6, 129, 501)
         feature, vad_frame=self.irtf_feature(mixed, vad)    
         
-        ###### gcc feature extraction  
-        # feature, vad_frame=self._get_gcc(mixed, vad)
-       
-       
         # model forward
         out=self.crn(feature)   # (B, 3, 360)
         
-        if LOCATA:
-            target=self.stft_model.azimuth_strided(vad_frame, azi).unsqueeze(0)
-            azi=azi[...,0]
-      
-            vad_target_pic=self.make_target( vad_frame, azi, iter_num, epoch)
-           
-
-            return out, target, vad_frame,vad_target_pic
-            
-        else:
-            target=self.make_target( vad_frame, azi, iter_num, epoch)
-            target, _ = torch.max(target, dim=3)   # (B, 3, 360)
         
-        # if mic_type=='linear':
-        #     target=self.target_flip(target)
-        
-        return out, target, vad_frame
+        return out
 
 

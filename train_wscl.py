@@ -113,6 +113,10 @@ class Learner_config():
             self.loss_func=torch.nn.modules.loss.KLDivLoss(reduction='none')
         elif self.args['learner']['loss']['type']=='mse':
             self.loss_func=torch.nn.modules.loss.MSELoss(reduction='none')
+            
+        elif self.args['learner']['loss']['type']=='scl':
+            from loss.scl_loss import Weighted_SupConLoss
+            self.loss_func=Weighted_SupConLoss(**self.args['learner']['loss']['option'])
 
         self.loss_train_map_num=self.args['learner']['loss']['option']['train_map_num']     # [0, 1, 2]
         self.loss_weight=self.args['learner']['loss']['option']['each_layer_weight']
@@ -125,15 +129,16 @@ class Learner_config():
             self.best_train_loss=-math.inf
 
 
-    def train_update(self, output, target):
+    def train_update(self, output, labels):
          
-        output=torch.sigmoid(output)      
-        loss=self.loss_func(output, target)
+        # output=torch.sigmoid(output)
+              
+        loss_mean = self.loss_func(output, labels)
 
-        for j in range(len(self.loss_weight)):
-            loss[:, j]=loss[:,j]*self.loss_weight[j]
+        # for j in range(len(self.loss_weight)):
+        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
 
-        loss_mean=loss.mean()
+        # loss_mean=loss.mean()
 
         if torch.isnan(loss_mean):
             print('nan occured')
@@ -342,7 +347,7 @@ class Trainer():
         vad = vad.reshape(-1, vad.shape[-2], vad.shape[-1])
         speech_azi = speech_azi.reshape(-1, speech_azi.shape[-1])
             
-        perm = torch.randperm(mixed.size(0))  # 무작위 인덱스 생성 (size : 128)
+        perm = torch.randperm(mixed.size(0))  # 무작위 인덱스 생성 (size : 256)
         
         mixed = mixed.index_select(0, perm)  
         vad = vad.index_select(0, perm)  
@@ -363,24 +368,31 @@ class Trainer():
         n_room = 8
         self.dataloader.train_loader.dataset.random_room_speech_select(n_room)
         for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
-            # mixed : [64, 2, 4, 64000]
-            # vad : [64, 2, 1, 64000]
-            # speech_azi : [64, 2, 1]
+            # mixed : [64, 8, 4, 64000]
+            # vad : [64, 8, 1, 64000]
+            # speech_azi : [64, 8, 1]
             mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
-            # mixed : [128, 4, 64000]   # 512 되어야 함
-            # vad : [128, 1, 64000]
-            # speech_azi : [128, 1]
+            # mixed : [512, 4, 64000]   # 512 되어야 함
+            # vad : [512, 1, 64000]
+            # speech_azi : [512, 1]
             
-            mixed=mixed.to(self.hyperparameter.device)
-            vad=vad.to(self.hyperparameter.device)
-            speech_azi=speech_azi.to(self.hyperparameter.device)
+            accumulation_steps = 8
+            mini_batch = mixed.shape[0] // accumulation_steps
+            loss = 0
+            for i in range(accumulation_steps):
+                mixed_split = mixed[i*mini_batch:(i+1)*mini_batch].to(self.hyperparameter.device)
+                vad_split = vad[i*mini_batch:(i+1)*mini_batch].to(self.hyperparameter.device)
+                speech_azi_split = speech_azi[i*mini_batch:(i+1)*mini_batch].to(self.hyperparameter.device)
+                
+                out = self.model(mixed_split, vad_split, speech_azi_split, iter_num, epoch, mic_type)
+                
+                loss += self.learner.train_update(out, speech_azi_split) / accumulation_steps
+                
+                self.learner.memory_delete([mixed_split, vad_split, speech_azi_split])
 
-            out, target, vad=self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
-
-            loss=self.learner.train_update(out, target)
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, out, target, loss])
+            self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
             
             self.dataloader.train_loader.dataset.random_room_speech_select(n_room)
         
