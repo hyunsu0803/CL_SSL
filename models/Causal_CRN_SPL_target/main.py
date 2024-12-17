@@ -1,6 +1,11 @@
-# from .CRN_SPL_target import main_model
-from .CL_CRN import main_model
+from .CRN_SPL_target import main_model_for_doa
+from .CL_CRN import main_model_for_scl
 
-def get_model(args):
+def get_model_for_scl(args):
 
-    return main_model(args)
+    return main_model_for_scl(args)
+
+
+def get_model_for_doa(args):
+
+    return main_model_for_doa(args)

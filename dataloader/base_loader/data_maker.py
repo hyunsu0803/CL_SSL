@@ -219,11 +219,14 @@ class base_data_maker(datamake):
 
 
     def __len__(self):
-        # return len(self.speech_csv)
-        return 360
+        return len(self.speech_csv)
 
 
-    def make_data(self, room_info, azimuth_deg, with_coherent_noise=False):
+    def make_data(self, idx=None, room_info=None, azimuth_deg=None, with_coherent_noise=False):
+        
+        if idx is None and room_info is None:
+            raise ValueError('idx or room_info must be given')
+        
         # 방 2개에 해당하는 rir 생성
         num_spk=random.randint(1, self.max_num_people) 
         
@@ -258,7 +261,11 @@ class base_data_maker(datamake):
         vad_list=[]
         speech_start_point_list=[]
         
-        speech_info = room_info['speech_info']
+        if idx is None:
+            speech_info = room_info['speech_info']
+        else:
+            speech_info=self.select_different_speakers(self.speech_csv.iloc[idx:idx+1], num_spk)    # num_spk=1
+
         
         # only 1 iterration
         for spk_num, spk_info in enumerate(speech_info.iterrows()):
@@ -340,23 +347,41 @@ class base_data_maker(datamake):
     
     def __getitem__(self, idx):
         # print(idx, end=' ')
+        return self.make_data(idx)
+    
+
+""" train """
+class train_data_maker_for_scl(base_data_maker):
+    def __init__(self, args):
+        super(train_data_maker_for_scl, self).__init__(args)
+        
+    def __len__(self):
+        return 360
+        
+    def __getitem__(self, idx):
         return self.arrange_data(idx)
     
     
-class train_data_maker(base_data_maker):
+class train_data_maker_for_doa(base_data_maker):
     def __init__(self, args):
-        super(train_data_maker, self).__init__(args)
+        super(train_data_maker_for_doa, self).__init__(args)
     
     
-class speech_data_maker(base_data_maker):
+
+""" validation & test """
+class speech_data_maker_for_scl(base_data_maker):
     def __init__(self, args):
-        super(speech_data_maker, self).__init__(args)
+        super(speech_data_maker_for_scl, self).__init__(args)
         
         print('speech_csv', self.args['speech_csv'])
         print('noise_csv', self.args['noise_csv'])
         
         self.pkl_dir=self.args['pkl_dir']
         os.makedirs(self.pkl_dir, exist_ok=True)
+        
+    
+    def __len__(self):
+        return 360
         
         
     def save_data(self, idx):
@@ -373,6 +398,42 @@ class speech_data_maker(base_data_maker):
         pkl_name = list(azi_list[0].numpy()) + white_noise_snr_list
         pkl_name = [str(int(i)) for i in pkl_name]
         pkl_name = '_'.join(pkl_name) + '.pkl'
+        pkl_name = self.pkl_dir + pkl_name
+        
+        os.makedirs(self.pkl_dir, exist_ok=True)
+        output=open(pkl_name, 'wb')
+        pickle.dump(save_dict, output)
+        output.close()
+        
+        return 1, 2, 3, 4
+        
+        
+    def __getitem__(self, idx):
+        return self.save_data(idx)
+    
+    
+class speech_data_maker_for_doa(base_data_maker):
+    def __init__(self, args):
+        super(speech_data_maker_for_doa, self).__init__(args)
+        
+        print('speech_csv', self.args['speech_csv'])
+        print('noise_csv', self.args['noise_csv'])
+        
+        self.pkl_dir=self.args['pkl_dir']
+        os.makedirs(self.pkl_dir, exist_ok=True)
+        
+        
+    def save_data(self, idx):
+        mixed, vad, azi_list, num_spk, fs, white_noise_snr = self.make_data(idx)
+        
+        save_dict={}
+        save_dict['noisy']=mixed    # tensor
+        save_dict['vad']=vad        # tensor
+        save_dict['azi']=azi_list   # tensor
+        save_dict['white_noise_snr_list']=white_noise_snr  # list
+        
+        
+        pkl_name = str(idx) + '.pkl'
         pkl_name = self.pkl_dir + pkl_name
         
         os.makedirs(self.pkl_dir, exist_ok=True)

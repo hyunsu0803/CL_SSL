@@ -6,7 +6,7 @@ import numpy as np
 import math
 import librosa
 import torchaudio.transforms as T
-
+from .CL_CRN import main_model_for_scl
     
     
 class NonCausal_Conv2D_Block(nn.Module):
@@ -127,6 +127,15 @@ class crn(nn.Module):
         self.azi_mapping_conv_layer=nn.ModuleList()
         self.azi_mapping_final=nn.ModuleList()
 
+        args[0]=config['GRU']['hidden_size']
+        args[1]=config['GRU']['hidden_size']
+        args[2]=1
+        kwargs['padding']=0
+      
+        for _ in range(output_num):
+            self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
+            self.azi_mapping_final.append(nn.Conv1d(config['GRU']['hidden_size'], self.azi_size, 1))
+
         # (B, 512, 690) => (B, 360)
         # args[0] = 690  # input channel
         # args[1] = 32    # output channel
@@ -141,26 +150,27 @@ class crn(nn.Module):
         #     self.azi_mapping_conv_layer.append(Conv2D_Block(*args, **kwargs))
         #     self.azi_mapping_final.append(nn.Conv2d(args[1], self.azi_size, (1, 1)))
         
-        kwargs['padding'] = 0
-        args[0] = 690
-        args[1] = 64
-        args[2] = 1
-        # args1 = [690, 64, 1]    # in_channel, out_channel, kernel size
-        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        args[0] = 64
-        args[1] = 1
-        args[2] = 1
-        # args2 = [64, 1, 1]
-        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        self.azi_mapping_final.append(nn.Conv1d(in_channels=512, out_channels=self.azi_size, kernel_size=1, padding=0))
         
-        args[0] = 512
-        args[1] = 512
-        args[2] = 1
-        # args3 = [512, 512, 1]
-        for _ in range(output_num-1):
-            self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-            self.azi_mapping_final.append(nn.Conv1d(in_channels=512, out_channels=self.azi_size, kernel_size=1, padding=0))
+        # kwargs['padding'] = 0
+        # args[0] = 690
+        # args[1] = 64
+        # args[2] = 1
+        # # args1 = [690, 64, 1]    # in_channel, out_channel, kernel size
+        # self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
+        # args[0] = 64
+        # args[1] = 1
+        # args[2] = 1
+        # # args2 = [64, 1, 1]
+        # self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
+        # self.azi_mapping_final.append(nn.Conv1d(in_channels=512, out_channels=self.azi_size, kernel_size=1, padding=0))
+        
+        # args[0] = 512
+        # args[1] = 512
+        # args[2] = 1
+        # # args3 = [512, 512, 1]
+        # for _ in range(output_num-1):
+        #     self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
+        #     self.azi_mapping_final.append(nn.Conv1d(in_channels=512, out_channels=self.azi_size, kernel_size=1, padding=0))
      
      
 
@@ -195,24 +205,34 @@ class crn(nn.Module):
         x=x.permute(0,2,1)              # (B, 512, 1)
         
         ### channel axis compression
-        final_layer=self.azi_mapping_final[0]
-        res_output=final_layer(x)       # (B, 360, 1)
-        outputs.append(res_output.squeeze(-1))
+        # final_layer=self.azi_mapping_final[0]
+        # res_output=final_layer(x)       # (B, 360, 1)
+        # outputs.append(res_output.squeeze(-1))
         
-        for cnn_layer, final_layer in zip(self.azi_mapping_conv_layer[2:], self.azi_mapping_final[1:]):
-            x=cnn_layer(x)              # (B, 512, 1)           
-            res_output=final_layer(x)   # (B, 360, 1)
-            outputs.append(res_output.squeeze(-1))
+        # for cnn_layer, final_layer in zip(self.azi_mapping_conv_layer[2:], self.azi_mapping_final[1:]):
+        #     x=cnn_layer(x)              # (B, 512, 1)           
+        #     res_output=final_layer(x)   # (B, 360, 1)
+        #     outputs.append(res_output.squeeze(-1))
             
-        output=torch.stack(outputs).permute(1,0,2)  # (3, B, 360) -> (B, 3, 360)
+        # output=torch.stack(outputs).permute(1,0,2)  # (3, B, 360) -> (B, 3, 360)
+        
+        # return output
+        
+        outputs=[]
+
+        for final_layer, cnn_layer in zip(self.azi_mapping_final, self.azi_mapping_conv_layer):
+            x=cnn_layer(x)
+            res_output=final_layer(x)
+            outputs.append(res_output)
+        output=torch.stack(outputs).permute(1,0,2,3)    # (B, 3, ...)
         
         return output
 
 
 
-class main_model(nn.Module):
+class main_model_for_doa(nn.Module):
     def __init__(self, config):
-        super(main_model, self).__init__()
+        super(main_model_for_doa, self).__init__()
         self.config=config
         
         self.eps=np.finfo(np.float32).eps
@@ -239,6 +259,7 @@ class main_model(nn.Module):
         self.azi_size=360//self.degree_resolution
 
         self.stft_model=ConvSTFT(**self.config['FFT'])
+        self.scl_model = main_model_for_scl()
         self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
     
 
@@ -348,8 +369,9 @@ class main_model(nn.Module):
         self.device = mixed.device
         
         r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
+        
         comp = torch.complex(r, i)  # B x C x F x T
-        comp = comp[:, :, :26, :]
+        comp = comp[:, :, :33, :]
         
         linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C
         
@@ -394,13 +416,13 @@ class main_model(nn.Module):
 
         
     def forward(self, mixed, vad, azi, iter_num, epoch, mic_type, LOCATA=False):
-        ###### irtf feature extraction  (B, 6, 50, 690), (B, 1, 690)
+
         # feature, vad_frame=self.irtf_feature(mixed, vad)
-        
-        ###### gcc feature extraction  
+         
         feature, vad_frame=self._get_gcc(mixed, vad)
-       
-        # model forward
+        
+        feature = self.scl_model(feature)       # dimension???
+
         out=self.crn(feature)   # (B, 3, 360)
         
         if LOCATA:
@@ -419,6 +441,6 @@ class main_model(nn.Module):
         # if mic_type=='linear':
         #     target=self.target_flip(target)
         
-        return out, target, vad_frame
+        return out, target
 
 

@@ -178,9 +178,9 @@ class crn(nn.Module):
 
 
 
-class main_model(nn.Module):
+class main_model_for_scl(nn.Module):
     def __init__(self, config):
-        super(main_model, self).__init__()
+        super(main_model_for_scl, self).__init__()
         self.config=config
         
         self.eps=np.finfo(np.float32).eps
@@ -361,7 +361,7 @@ class main_model(nn.Module):
     #     return target
 
         
-    def forward(self, mixed, vad, azi, iter_num, epoch, mic_type, LOCATA=False):
+    def forward(self, mixed, vad):
         ###### irtf feature extraction  (B, 6, 129, 501)
         # feature, vad_frame=self.irtf_feature(mixed, vad) 
         

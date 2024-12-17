@@ -7,7 +7,7 @@ import importlib
 import math
 import wandb
 from tqdm import tqdm
-from dataloader.wrap_dataload import Train_dataload_for_scl, Synth_dataload, Real_dataload
+from dataloader.wrap_dataload import Train_dataload_for_doa, Synth_dataload, Real_dataload
 import pandas as pd
 
 
@@ -66,7 +66,7 @@ class Learner_config():
         
         model_dir=importlib.import_module(model_import)
         
-        self.model=model_dir.get_model_for_scl(self.args['model']).to(self.device)
+        self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
         self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])   
         
     def model_select_for_finetune(self):
@@ -75,7 +75,7 @@ class Learner_config():
 
         model_dir=importlib.import_module(model_import)
         
-        self.model=model_dir.get_model_for_scl(self.args['model']).to(self.device)
+        self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
 
         trained=torch.load(self.args['hyparam']['model'], map_location=self.device)     # only for infer
         self.model.load_state_dict(trained['model_state_dict'], )                       # only for infer
@@ -103,9 +103,8 @@ class Learner_config():
 
     def init_loss_func(self):
 
-        from loss.scl_loss import Weighted_SupConLoss
         
-        self.loss_func=Weighted_SupConLoss()
+        self.loss_func=torch.nn.modules.loss.BCELoss(reduction='none')
 
         self.loss_train_map_num=self.args['learner']['loss']['option']['train_map_num']     # [0, 1, 2]
         self.loss_weight=self.args['learner']['loss']['option']['each_layer_weight']
@@ -119,51 +118,40 @@ class Learner_config():
 
 
     def train_update(self, output, labels):
-         
-        # output=torch.sigmoid(output)
-        with torch.cuda.amp.autocast():
-            loss_mean = self.loss_func(output, labels)
+            
+        output=torch.sigmoid(output)
+        loss = self.loss_func(output, labels)
 
-        # for j in range(len(self.loss_weight)):
-        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
+        for j in range(len(self.loss_weight)):
+            loss[:, j]=loss[:,j]*self.loss_weight[j]
 
-        # loss_mean=loss.mean()
+        loss_mean=loss.mean()
 
         if torch.isnan(loss_mean):
             print('nan occured')
             self.optimizer.zero_grad()
             return loss_mean
 
-        # loss_mean.backward()
-        # torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
-        # self.optimizer.step()
-        # self.optimizer.zero_grad()
-        
-        self.scaler.scale(loss_mean).backward()
+        loss_mean.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+        self.optimizer.step()
         self.optimizer.zero_grad()
-        
 
         return loss_mean
 
 
     def test_update(self, output, labels):
-       
-        # target=target[:, self.loss_train_map_num]       # :, [0, 1, 2]
-        # output=output[:, self.loss_train_map_num].sigmoid()
 
-        # loss=self.loss_func(output, target)
+        target=target[:, self.loss_train_map_num]       # :, [0, 1, 2]
+        output=output[:, self.loss_train_map_num].sigmoid()
 
-        # for j in range(len(self.loss_weight)):
-        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
-        # loss_mean=loss.mean()
+        loss=self.loss_func(output, target)
+
+        for j in range(len(self.loss_weight)):
+            loss[:, j]=loss[:,j]*self.loss_weight[j]
+        loss_mean=loss.mean()
         
-        with torch.cuda.amp.autocast():
-            loss_mean = self.loss_func(output, labels)
         
-
         if torch.isnan(loss_mean):
             print('nan occured')
             self.optimizer.zero_grad()
@@ -296,7 +284,7 @@ class Dataloader_config():
         
     def config(self):
         
-        self.train_loader=Train_dataload_for_scl(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
+        self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
         self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])
         
         return self.args   
@@ -338,21 +326,6 @@ class Trainer():
             self.validation(epoch)           
             
             self.logger.epoch_finish(epoch, self.model, self.optimizer)
-            
-           
-    def permute_n_augment(self, mixed, vad, speech_azi):
-        
-        mixed = mixed.reshape(-1, mixed.shape[-2], mixed.shape[-1])
-        vad = vad.reshape(-1, vad.shape[-2], vad.shape[-1])
-        speech_azi = speech_azi.reshape(-1, speech_azi.shape[-1])
-            
-        perm = torch.randperm(mixed.size(0))  # 무작위 인덱스 생성 (size : 256)
-        
-        mixed = mixed.index_select(0, perm)  
-        vad = vad.index_select(0, perm)  
-        speech_azi = speech_azi.index_select(0, perm)
-        
-        return mixed, vad, speech_azi
     
 
     def train(self, epoch):
@@ -363,34 +336,22 @@ class Trainer():
         mic_type=self.args['dataloader']['train']['mic_type']
         
         
-        
-        self.n_room = 8
-        self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
-            # mixed : [64, 8, 4, 64000]
-            # vad : [64, 8, 1, 64000]
-            # speech_azi : [64, 8, 1]
-            mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
-            # mixed : [512, 4, 64000]   # 512 되어야 함
-            # vad : [512, 1, 64000]
-            # speech_azi : [512, 1]
+            
             
             mixed=mixed.to(self.hyperparameter.device)
             vad=vad.to(self.hyperparameter.device)
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
             
-            with torch.cuda.amp.autocast():
-                
-                out = self.model(mixed, vad)
-                
-                loss = self.learner.train_update(out, speech_azi)
+            out = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
+            
+            loss = self.learner.train_update(out, speech_azi)
                 
 
             self.logger.train_iter_log(loss)
             self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
             
-            self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         
         
         self.logger.train_epoch_log()
@@ -408,7 +369,6 @@ class Trainer():
             # num_spk : (16)
             for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
                 
-                mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
                 
                 mixed=mixed.to(self.hyperparameter.device)
                 vad=vad.to(self.hyperparameter.device)

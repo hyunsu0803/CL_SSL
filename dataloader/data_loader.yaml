@@ -18,9 +18,10 @@ train:
   degree_resolution: 1
 
   dataloader_dict:
-    batch_size: 32 
+    # batch_size: 32 
+    batch_size: 16
     shuffle: True
-    num_workers: 0
+    num_workers: 16
     drop_last: True
 
   mic_type: miyungpa 
@@ -81,7 +82,8 @@ val:
     degree_resolution: 1                              
 
     dataloader_dict:        # essential for real DataLoader
-      batch_size: 32 
+      # batch_size: 32 
+      batch_size: 1
       shuffle: False
       num_workers: 0 
       drop_last: True
@@ -91,12 +93,9 @@ val:
     max_n_mic: 4            # in usage
 
   maker:
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/val/
-    # speech_dir: /root/clssl/SiTEC/
-    # noise_dir: /root/clssl/MS-SNSD/noise_test/
-    # vad_dir: /root/clssl/SSL_src/prepared/vad/SiTEC/
-    # metadata_dir: /root/clssl/SSL_src/metadata/
 
+    pkl_dir: /root/clssl/SSL_src/prepared/pkl/doa/
+    
     noise_dir: /root/clssl/MS-SNSD/
     metadata_dir: /root/clssl/SSL_src/metadata/
 
@@ -165,7 +164,7 @@ val:
   
 test:
   loader:
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/val/ 
+    pkl_dir: /root/clssl/SSL_src/prepared/pkl/scl/ 
   
 
     ans_azi: 0

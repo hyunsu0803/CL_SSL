@@ -216,8 +216,64 @@ class acoustic_simulator_on_the_fly(simulator_common):
         
         return theta, mic_rotated_pos, mic_center
     
+    def get_source_pos_for_doa(self, theta, azi_pos, linear_azi_pos, mic_center, room_sz):
 
-    def get_source_pos(self, theta, azi_pos, linear_azi_pos, mic_center, room_sz, azi_deg):
+        while True:
+            r=random.uniform(*self.rir_character_dict['room']['distance']) # distance from mic
+            np_azi=np.array(azi_pos)
+            np_linear_azi=np.array(linear_azi_pos)
+
+            while True:
+                
+                azi_deg=random.randrange(*self.rir_character_dict['room']['azimuth'])
+              
+                if len(azi_pos)==0:
+                    break
+
+                ##### real gap
+                np_azi_gap=np.abs(np_azi-azi_deg)
+                np_azi_360_gap=360-np_azi_gap
+                np_azi_gap=np.stack((np_azi_gap, np_azi_360_gap), axis=0).min(axis=0)
+           
+
+                ##### linear gap
+                if azi_deg>180:
+                    azi_linear_deg=360-azi_deg
+                else:
+                    azi_linear_deg=azi_deg
+
+                np_linear_azi_gap=np.abs(np_linear_azi-azi_linear_deg)
+
+                
+                # check least degree
+                np_azi_gap=np_azi_gap>self.rir_character_dict['azi_gap']
+                np_linear_azi_gap=np_linear_azi_gap>self.rir_character_dict['azi_gap']
+      
+                
+                if np_azi_gap.all() and np_linear_azi_gap.all():
+                    break  
+             
+            azi_fluctuation=0.0
+            
+            azi=np.deg2rad(azi_deg+theta+azi_fluctuation+self.rir_character_dict['ref_vec'])
+            
+            ele=random.uniform(*self.rir_character_dict['room']['elevation'][:2])
+            ele=np.deg2rad(ele)
+
+            x=r*np.sin(ele)*np.cos(azi)
+            y=r*np.sin(ele)*np.sin(azi)
+            z=r*np.cos(ele)
+         
+            speech_pos=mic_center+ np.array([x,y,z])
+
+            if 0<speech_pos[0]<room_sz[0] and 0<speech_pos[1]<room_sz[1] and 0<speech_pos[2]<room_sz[2]:
+                break
+    
+        return speech_pos, azi_deg
+    
+    
+
+    def get_source_pos_for_scl(self, theta, azi_pos, linear_azi_pos, mic_center, room_sz, azi_deg):
 
         while True:
             r=random.uniform(*self.rir_character_dict['room']['distance']) # distance from mic
@@ -312,9 +368,12 @@ class acoustic_simulator_on_the_fly(simulator_common):
         return speech_pos, azi_deg
     
 
-    def create_param(self, num_spk, with_coherent_noise, mic_type, mic_num, room_info, azimuth_deg):
+    def create_param(self, num_spk, with_coherent_noise, mic_type, mic_num, room_info=None, azimuth_deg=None):
         
-        room_sz, rt60, abs_weight = room_info['room_sz'], room_info['rt60'], room_info['abs_weight']
+        if room_info is not None:
+            room_sz, rt60, abs_weight = room_info['room_sz'], room_info['rt60'], room_info['abs_weight']
+        else:
+            room_sz, rt60, abs_weight = self.random_room_select()
         
         self.gpu_rir_param(room_sz, rt60, abs_weight)   # room_sz, beta, Tdiff, Tmax, nb_img setting
         
@@ -371,7 +430,10 @@ class acoustic_simulator_on_the_fly(simulator_common):
         speech_pos_list=[]
         
         for i in range(num_spk):
-            speech_pos, azi_deg=self.get_source_pos(theta, azi_list, linear_azi_pos, mic_center, room_sz, azimuth_deg)
+            if azimuth_deg is not None:
+                speech_pos, azi_deg=self.get_source_pos_for_scl(theta, azi_list, linear_azi_pos, mic_center, room_sz, azimuth_deg)
+            else:
+                speech_pos, azi_deg=self.get_source_pos_for_doa(theta, azi_list, linear_azi_pos, mic_center, room_sz)
             speech_pos_list.append(speech_pos)
             azi_list.append(azi_deg)
             if azi_deg>180:

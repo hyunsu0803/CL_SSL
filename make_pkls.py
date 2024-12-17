@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import random
 from tqdm import tqdm
-from dataloader.wrap_dataload import Gunshot_datamake, Speech_datamake
+from dataloader.wrap_dataload import Speech_datamake_for_scl, Speech_datamake_for_doa
 
 
 class Hyparam_set():
@@ -50,7 +50,7 @@ class Dataloader_config():
         self.args=args
         
     def config(self):
-        self.val_maker = Speech_datamake(self.args['dataloader']['val']['maker'])
+        self.val_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
         # self.test_maker = Gunshot_datamake(self.args['dataloader']['test']['maker'])
       
         return self.args   
@@ -71,11 +71,12 @@ class Trainer():
     
     def run(self, ):
         
-        self.validation(0)
+        # self.validation_for_scl(0)
+        self.validation_for_doa(0)
         # self.test(0)
         
 
-    def validation(self, epoch):
+    def validation_for_scl(self, epoch):
 
         with torch.no_grad():
             n_room = 8
@@ -83,6 +84,12 @@ class Trainer():
             for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.val_maker , desc='Test', total=len(self.dataloader.val_maker), )):
                 self.dataloader.val_maker.dataset.random_room_speech_select(n_room)
                 
+    
+    def validation_for_doa(self, epoch):
+            
+            with torch.no_grad():
+                for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.val_maker , desc='Test', total=len(self.dataloader.val_maker), )):
+                    continue
 
 
     def test(self, epoch):
