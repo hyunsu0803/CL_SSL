@@ -365,15 +365,17 @@ class speech_data_maker(base_data_maker):
         save_dict={}
         save_dict['noisy']=mixed    # tensor
         save_dict['vad']=vad        # tensor
-        save_dict['azi']=azi_list[0]   # tensor
+        save_dict['azi']=azi_list   # tensor
         save_dict['white_noise_snr_list']=white_noise_snr_list  # list
+        
+        # azi_dir = str(int(azi_list[0])) + '/'
         
         pkl_name = list(azi_list[0].numpy()) + white_noise_snr_list
         pkl_name = [str(int(i)) for i in pkl_name]
         pkl_name = '_'.join(pkl_name) + '.pkl'
         pkl_name = self.pkl_dir + pkl_name
         
-        
+        os.makedirs(self.pkl_dir, exist_ok=True)
         output=open(pkl_name, 'wb')
         pickle.dump(save_dict, output)
         output.close()

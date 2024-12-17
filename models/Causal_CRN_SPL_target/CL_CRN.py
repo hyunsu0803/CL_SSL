@@ -1,5 +1,6 @@
 from .FFT import ConvSTFT 
 from torch import nn
+import torch.nn.functional as F
 import torch
 from util import *
 import numpy as np
@@ -14,7 +15,8 @@ class Causal_Conv2D_Block(nn.Module):
         
         self.conv2d=nn.Conv2d(*args, **kwargs)
 
-        self.norm=nn.BatchNorm2d(args[1])
+        self.norm=nn.BatchNorm2d(args[1], eps=1e-5)
+        # self.norm=nn.LayerNorm(args[1])
 
         self.activation=nn.ELU()
         
@@ -38,6 +40,7 @@ class Conv1D_Block(nn.Module):
         self.conv1d=nn.Conv1d(*args, **kwargs)
         
         self.norm=nn.BatchNorm1d(args[1])
+        # self.norm=nn.LayerNorm(args[1])
         
         self.activation=nn.ELU()
 
@@ -105,23 +108,31 @@ class crn(nn.Module):
         ##############################
         # output layer
         ##############################
-        self.Conv1D_Block_layer=nn.ModuleList()
+        self.time_comp_layer=nn.ModuleList()
+        kwargs['padding']=1
+        args = [501, 128, 3]  # in_channels, out_channels, kernel_size
+        self.time_comp_layer.append(Conv1D_Block(*args, **kwargs))
+        args = [128, 32, 3]
+        self.time_comp_layer.append(Conv1D_Block(*args, **kwargs))
         
-        kwargs['padding']=0
-        args = [512, 256, 3]  # in_channels, out_channels, kernel_size
-        self.Conv1D_Block_layer.append(Conv1D_Block(*args, **kwargs))
-        
-        args = [256, 128, 3]
-        self.Conv1D_Block_layer.append(Conv1D_Block(*args, **kwargs))
-        
-        args = [128, 64, 3]
-        self.Conv1D_Block_layer.append(Conv1D_Block(*args, **kwargs))
-        
-        args = [64, 32, 3]
-        self.Conv1D_Block_layer.append(Conv1D_Block(*args, **kwargs))
+
+        self.channel_comp_layer=nn.ModuleList()
+        args = [512, 128, 3]    
+        self.channel_comp_layer.append(Conv1D_Block(*args, **kwargs))
+        args = [128, 64, 3]     
+        self.channel_comp_layer.append(Conv1D_Block(*args, **kwargs))
 
         # Final linear transformation to (32, 32)
-        self.feat_mapping_final = nn.Conv1d(in_channels=493, out_channels=32, kernel_size=1, padding=0)
+        # self.feat_mapping_final = nn.Conv1d(in_channels=493, out_channels=32, kernel_size=1, padding=0)
+        
+        ##############################
+        # projection layer
+        ##############################
+        self.head = nn.Sequential(
+                nn.Linear(2048, 2048),
+                nn.ReLU(inplace=True),
+                nn.Linear(2048, 128)
+            )
     
      
 
@@ -132,32 +143,36 @@ class crn(nn.Module):
         ##############################
         # x: (B, 6, 26, 501)
         for cnn_layer, pooling_layer in zip(self.cnn, self.pooling):
-            x=cnn_layer(x)[...,:x.shape[-1]]    # (B, 64, 26, 501)  (B, 64, 13, 501)    (B, 64, 6, 501)
-            x=pooling_layer(x)                  # (B, 64, 13, 501)  (B, 64, 6, 501)    (B, 64, 3, 501)
+            x=cnn_layer(x)[...,:x.shape[-1]]    # (B, 64, 64, 501)  (B, 64, 32, 501)    (B, 64, 6, 501)
+            x=pooling_layer(x)                  # (B, 64, 32, 501)  (B, 64, 16, 501)    (B, 64, 3, 501)
 
         
         ##############################
         # GRU layer
         ##############################
-        b, c, f, t = x.shape                  # (mB, 64, 3, 501)
-        x = x.view(b, -1, t).permute(0,2,1)   # (mB, 501, 192)
+        b, c, f, t = x.shape                  # (B, 64, 3, 501)
+        x = x.view(b, -1, t).permute(0,2,1)   # (B, 501, 192)
 
         h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  # h0 : (2*gru_num_layers, B, hidden_size) (4, mB, 256)
         self.GRU_layer.flatten_parameters()
         
-        x, h=self.GRU_layer(x, h0)      # (mB, 501, 512(hidden size))
-        x=x.permute(0,2,1)              # (B, 512, 501)
+        x, h=self.GRU_layer(x, h0)      # (B, 501, 512(hidden size))
+        # x=x.permute(0,2,1)              
 
         
         ##############################
         # output layer
         ##############################
-        for cnn_layer in self.Conv1D_Block_layer:
-            x = cnn_layer(x)  # Reduce along the time axis (B, 256, 499), (B, 128, 497), (B, 64, 495), (B, 32, 493)
-        
-        x = x.permute(0, 2, 1)  # (B, 32, time) -> (B, time, 32)
+        for cnn_layer in self.time_comp_layer:
+            x = cnn_layer(x)  # Reduce along the time axis (B, 128, 512), (B, 32, 512)
+        x = x.permute(0, 2, 1)  # (B, 32, 512) -> (B, 512, 32)
+        for cnn_layer in self.channel_comp_layer:
+            x = cnn_layer(x) # Reduce along the channel axis (B, 128, 32), (B, 64, 32)
 
-        x = self.feat_mapping_final(x)  # (B, 32, 32)
+
+
+        x = x.view(x.size(0), -1)  # (B, 2048)
+        x = F.normalize(x, dim=1)
         
         return x
 
@@ -169,6 +184,7 @@ class main_model(nn.Module):
         self.config=config
         
         self.eps=np.finfo(np.float32).eps
+        # self.eps=1e-3
         self.ref_ch=self.config['ref_ch']
 
         ###### sigma
@@ -269,6 +285,10 @@ class main_model(nn.Module):
     
 
     def irtf_feature(self, mixed, vad):  
+        mixed_max = mixed.max()
+        mixed_min = mixed.min()
+        mixed = (mixed - mixed_min) / (mixed_max - mixed_min) * 2 - 1
+        
         r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
         # B x C x F x T = (B, 4, 129, 501)
         comp = torch.complex(r, i)
@@ -276,12 +296,14 @@ class main_model(nn.Module):
         
         comp_ref = comp[..., [self.ref_ch], :, :]
         comp_ref = torch.complex(
-            comp_ref.real.clamp(self.eps), comp_ref.imag.clamp(self.eps)
+            comp_ref.real.clamp(min=1e-2), comp_ref.imag.clamp(min=1e-2)
         )
+
 
         comp=torch.cat(
         (comp[..., self.ref_ch-1:self.ref_ch, :, :], comp[..., self.ref_ch+1:, :, :]),
-        dim=-3) / comp_ref
+        dim=-3) / (comp_ref + 1e-2)
+
         feature=torch.cat((comp.real, comp.imag), dim=1)    # (B, 6, 129, 501)
         
         
@@ -295,22 +317,22 @@ class main_model(nn.Module):
         
         r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
         comp = torch.complex(r, i)  # B x C x F x T
-        comp = comp[:, :, :26, :]
+        comp = comp[:, :, :33, :]
         
-        linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C
+        linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C = (B, 501, 26, 4)
         
-        self._nb_mel_bins = 64  
+        # self._nb_mel_bins = 64  
         
         gcc_feat = []
         for m in range(linear_spectra.shape[-1]):
             for n in range(m+1, linear_spectra.shape[-1]):
                 R = torch.conj(linear_spectra[:, :, :, m]) * linear_spectra[:, :, :, n]        
-                cc = torch.fft.irfft(torch.exp(1.j*torch.angle(R)), dim=-1)      # (B, T, 2*(F-1)) (B, 345, 1024)
+                cc = torch.fft.irfft(torch.exp(1.j*torch.angle(R)), dim=-1)      # (B, T, 2*(F-1)) (B, 501, 64)
                 # cc.shape (B, 345, 64)
                 gcc_feat.append(cc)
         
-        gcc_feat = torch.stack(gcc_feat, dim=-1)      # (B, 690, 50, 6)
-        gcc_feat = gcc_feat.permute(0, 3, 2, 1)         # (B, 6, 50, 690)
+        gcc_feat = torch.stack(gcc_feat, dim=-1)      # (B, 501, 64, 6)
+        gcc_feat = gcc_feat.permute(0, 3, 2, 1)         # (B, 6, 64, 501)
 
         return gcc_feat, vad_frame
 
@@ -341,10 +363,13 @@ class main_model(nn.Module):
         
     def forward(self, mixed, vad, azi, iter_num, epoch, mic_type, LOCATA=False):
         ###### irtf feature extraction  (B, 6, 129, 501)
-        feature, vad_frame=self.irtf_feature(mixed, vad)    
+        # feature, vad_frame=self.irtf_feature(mixed, vad) 
+        
+        ###### gcc feature extraction  (B, 6, 256, 501)
+        feature, vad_frame=self._get_gcc(mixed, vad)   
         
         # model forward
-        out=self.crn(feature)   # (B, 3, 360)
+        out=self.crn(feature)   # (B, 2048)
         
         
         return out

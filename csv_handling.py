@@ -119,5 +119,22 @@ def count_num_wavs():
     
     wavs = glob('/root/mydir/miyungpa/gunshot_real/**/*.wav', recursive=True)
     print(len(wavs))
+    
+    
+    
+def audio_path_specify():
+    
+    df = pd.read_csv('/root/clssl/SSL_src/metadata/test_librispeech.csv')
+    
+    # 'audio_path' 열의 각 경로를 수정
+    def modify_path(path):
+        parts = path.split('-')  # '-'로 분리
+        new_path = parts[:2] + [path]  # 앞 두 요소와 전체 경로 추가
+        return '/'.join(new_path)  # '/'로 연결
+    
+    # apply로 각 경로에 대해 modify_path 함수 적용
+    df['audio_path'] = df['audio_path'].apply(modify_path)
+    
+    df.to_csv('/root/clssl/SSL_src/metadata/test_librispeech.csv', index=False)
 
-count_num_wavs()
+audio_path_specify()

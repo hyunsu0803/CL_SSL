@@ -18,7 +18,7 @@ train:
   degree_resolution: 1
 
   dataloader_dict:
-    batch_size: 64 
+    batch_size: 32 
     shuffle: True
     num_workers: 0
     drop_last: True
@@ -81,7 +81,7 @@ val:
     degree_resolution: 1                              
 
     dataloader_dict:        # essential for real DataLoader
-      batch_size: 64 
+      batch_size: 32 
       shuffle: False
       num_workers: 0 
       drop_last: True
@@ -92,58 +92,65 @@ val:
 
   maker:
     pkl_dir: /root/clssl/SSL_src/prepared/pkl/val/
-    speech_dir: /root/clssl/SiTEC/
-    noise_dir: /root/clssl/MS-SNSD/noise_test/
-    vad_dir: /root/clssl/SSL_src/prepared/vad/SiTEC/
+    # speech_dir: /root/clssl/SiTEC/
+    # noise_dir: /root/clssl/MS-SNSD/noise_test/
+    # vad_dir: /root/clssl/SSL_src/prepared/vad/SiTEC/
+    # metadata_dir: /root/clssl/SSL_src/metadata/
+
+    noise_dir: /root/clssl/MS-SNSD/
     metadata_dir: /root/clssl/SSL_src/metadata/
+
+    speech_dir: /root/clssl/LibriSpeech/test-clean/
+    vad_dir: /root/clssl/SSL_src/prepared/vad/test-clean/
     
-    speech_csv: val_sitec.csv
+    speech_csv: test_librispeech.csv
     noise_csv: val_noise.csv
     
-    ans_azi: 0                                       
-    degree_resolution: 1                             
-    speech_least_chunk_size: 32000
-    duration: 64000 # 4s
-    white_noise_snr: [5, 70]
-    normalize_factor: [0.004, 1.0]
-    SNR: [0, 40]
-    spk_SNR: [-5, 5]
-    max_spk: 1
+    
+    num_spk: 1  # for real DataLoader
+    ans_azi: 0
+    degree_resolution: 1
 
-    dataloader_dict:        # essential for real DataLoader
-      batch_size: 64 
-      shuffle: False
-      num_workers: 0 
+    dataloader_dict:
+      batch_size: 1 
+      shuffle: True
+      num_workers: 0
       drop_last: True
 
     mic_type: miyungpa 
     mic_num: 4 
-    max_n_mic: 4            # in usage
-    
-    gpu_rir_characteristic: # on_the_fly.rir_character_dict
+    max_n_mic: 4 
+    max_spk: 1
+    speech_least_chunk_size: 32000
+    duration: 64000 # 4s
+
+    SNR: [10, 40]
+    spk_SNR: [-5, 5]
+    white_noise_snr: [30, 70]
+    normalize_factor: [0.004, 1.0]
+  
+
+    gpu_rir_characteristic: 
+        
       rt60_bound: [0.4, 1.0]
       abs_weights_bound: [0.5, 1.0]
-      room_sz_bound: [[14.0, 14.0, 6.0], [46.0, 46.0, 11.0]] 
+      room_sz_bound: [[25.0, 25.0, 6.0], [45.0, 45.0, 12.0]]
         
       azi_gap: 30
 
-      array_pos: #[[0.1, 0.1, 0.1], [0.9, 0.9, 0.5]]
-        x: [0.1, 0.9]
-        y: [0.1, 0.9]
-        z: [0.1, 0.5]
       mic:
         rotation: True
         mic_type: miyungpa
-        mic_height: [0.3, 10.2]
-        mic_from_wall: 0.2
+        mic_height: [0.7, 1.5]
+        mic_from_wall: 1.2
 
       ref_vec: 0
       room:
-        distance: [4, 25] # m
+        distance: [1, 10] # m
         azimuth: [0, 360, 1] # start, end, unit # degree
-        elevation: [30, 100, 1]   
+        elevation: [30, 110, 1]
 
-      gpu_rir_generate_dict: # on_the_fly.params
+      gpu_rir_generate_dict: # input of gpu rir
         room_sz:
         beta:
         pos_src:
@@ -152,27 +159,13 @@ val:
         Tmax:
         fs: 16000.0
         c: 343.0
-        mic_pattern: omni 
+        orV_rcv:
+        mic_pattern: omni   
   
   
-# gunshot 
 test:
   loader:
-    pkl_dir: /root/mydir/miyungpa/prepared/pkl/gunshot_online_441_yes_vad_yes_noise_8s/test/
-    data_csv: /root/mydir/miyungpa/metadata/gunshot_online_test.csv
-    vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_online_010/
-
-
-    # data_dir: /root/mydir/miyungpa/gunshot_real/test/
-    # vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_real/test/
-    # data_csv: /root/mydir/miyungpa/metadata/ours_test_answer.csv
-
-
-    # vad_dir: /root/mydir/miyungpa/prepared/vad/gunshot_real/test/
-    # pkl_dir: /root/mydir/miyungpa/prepared/pkl/gunshot_real/test/
-    
-    # data_csv: /root/mydir/miyungpa/metadata/ours_test.csv
-    noise_csv: /root/mydir/miyungpa/metadata/val_noise_for_demo.csv 
+    pkl_dir: /root/clssl/SSL_src/prepared/pkl/val/ 
   
 
     ans_azi: 0

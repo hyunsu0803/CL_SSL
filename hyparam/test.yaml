@@ -8,14 +8,13 @@ acc_threshold: 5
 local_maximum_distance: 30
 
 
-model: '/root/mydir/results_final_gunshot_8s/model_checkpoint/best_model.tar'
-# model: '/root/mydir/best_model.tar'
-model_dir: '/root/mydir/results_final_gunshot_8s/model_checkpoint/'
+model: '/root/clssl/results/model_checkpoint/best_model.tar'
+model_dir: '/root/clssl/results/model_checkpoint/'
 
 result_folder: 
   room_type: ['evaluation']
 
-  inference_folder: '/root/mydir/results_final_gunshot_8s/'
+  inference_folder: '/root/clssl/results/'
   
 
 

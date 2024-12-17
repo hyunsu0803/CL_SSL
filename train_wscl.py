@@ -53,6 +53,7 @@ class Hyparam_set():
 class Learner_config():
     def __init__(self, args) -> None:
         self.args=args
+        self.scaler = torch.cuda.amp.GradScaler()   # mixed precision
 
     def memory_delete(self, *args):
         for a in args:
@@ -116,7 +117,7 @@ class Learner_config():
             
         elif self.args['learner']['loss']['type']=='scl':
             from loss.scl_loss import Weighted_SupConLoss
-            self.loss_func=Weighted_SupConLoss(**self.args['learner']['loss']['option'])
+            self.loss_func=Weighted_SupConLoss()
 
         self.loss_train_map_num=self.args['learner']['loss']['option']['train_map_num']     # [0, 1, 2]
         self.loss_weight=self.args['learner']['loss']['option']['each_layer_weight']
@@ -132,8 +133,8 @@ class Learner_config():
     def train_update(self, output, labels):
          
         # output=torch.sigmoid(output)
-              
-        loss_mean = self.loss_func(output, labels)
+        with torch.cuda.amp.autocast():
+            loss_mean = self.loss_func(output, labels)
 
         # for j in range(len(self.loss_weight)):
         #     loss[:, j]=loss[:,j]*self.loss_weight[j]
@@ -145,24 +146,34 @@ class Learner_config():
             self.optimizer.zero_grad()
             return loss_mean
 
-        loss_mean.backward()
+        # loss_mean.backward()
+        # torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
+        # self.optimizer.step()
+        # self.optimizer.zero_grad()
+        
+        self.scaler.scale(loss_mean).backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
-        self.optimizer.step()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
         self.optimizer.zero_grad()
+        
 
         return loss_mean
 
 
-    def test_update(self, output, target):
+    def test_update(self, output, labels):
        
-        target=target[:, self.loss_train_map_num]       # :, [0, 1, 2]
-        output=output[:, self.loss_train_map_num].sigmoid()
+        # target=target[:, self.loss_train_map_num]       # :, [0, 1, 2]
+        # output=output[:, self.loss_train_map_num].sigmoid()
 
-        loss=self.loss_func(output, target)
+        # loss=self.loss_func(output, target)
 
-        for j in range(len(self.loss_weight)):
-            loss[:, j]=loss[:,j]*self.loss_weight[j]
-        loss_mean=loss.mean()
+        # for j in range(len(self.loss_weight)):
+        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
+        # loss_mean=loss.mean()
+        
+        with torch.cuda.amp.autocast():
+            loss_mean = self.loss_func(output, labels)
         
 
         if torch.isnan(loss_mean):
@@ -359,14 +370,14 @@ class Trainer():
     def train(self, epoch):
 
         self.model.train()
-        self.optimizer.zero_grad()
+        # self.optimizer.zero_grad()
 
         mic_type=self.args['dataloader']['train']['mic_type']
         
         
         
-        n_room = 8
-        self.dataloader.train_loader.dataset.random_room_speech_select(n_room)
+        self.n_room = 8
+        self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
             # mixed : [64, 8, 4, 64000]
             # vad : [64, 8, 1, 64000]
@@ -376,25 +387,23 @@ class Trainer():
             # vad : [512, 1, 64000]
             # speech_azi : [512, 1]
             
-            accumulation_steps = 8
-            mini_batch = mixed.shape[0] // accumulation_steps
-            loss = 0
-            for i in range(accumulation_steps):
-                mixed_split = mixed[i*mini_batch:(i+1)*mini_batch].to(self.hyperparameter.device)
-                vad_split = vad[i*mini_batch:(i+1)*mini_batch].to(self.hyperparameter.device)
-                speech_azi_split = speech_azi[i*mini_batch:(i+1)*mini_batch].to(self.hyperparameter.device)
+            mixed=mixed.to(self.hyperparameter.device)
+            vad=vad.to(self.hyperparameter.device)
+            speech_azi=speech_azi.to(self.hyperparameter.device)
+            
+            
+            with torch.cuda.amp.autocast():
                 
-                out = self.model(mixed_split, vad_split, speech_azi_split, iter_num, epoch, mic_type)
+                out = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
                 
-                loss += self.learner.train_update(out, speech_azi_split) / accumulation_steps
+                loss = self.learner.train_update(out, speech_azi)
                 
-                self.learner.memory_delete([mixed_split, vad_split, speech_azi_split])
-
 
             self.logger.train_iter_log(loss)
             self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
             
-            self.dataloader.train_loader.dataset.random_room_speech_select(n_room)
+            self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
+        
         
         self.logger.train_epoch_log()
 
@@ -409,18 +418,23 @@ class Trainer():
             # mixed : (16, 4, 64000)
             # speech_azi : (16, 1)
             # num_spk : (16)
-            for iter_num, (mixed, vad, speech_azi, num_spk, pkl_idx) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
+            for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
+                
+                mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
                 
                 mixed=mixed.to(self.hyperparameter.device)
                 vad=vad.to(self.hyperparameter.device)
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
-                out, target, vad=self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
+                with torch.cuda.amp.autocast():
                 
-                loss=self.learner.test_update(out, target)
+                    out = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
+                    
+                    loss=self.learner.test_update(out, speech_azi)
+                    
+                    
                 self.logger.test_iter_log(loss)
-          
-                self.learner.memory_delete([mixed, vad, speech_azi, out, target, loss])
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
             

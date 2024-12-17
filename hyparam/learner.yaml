@@ -19,7 +19,8 @@ optimizer_scheduler:
     
 loss: 
   optimize_method: 'min'
-  type: BCEWithLogitsLoss
+  # type: BCEWithLogitsLoss
+  type: scl
 
   option:
     train_map_num: [0, 1, 2]

@@ -2,7 +2,7 @@
 device=0
 echo "device: $device"
 
-CUDA_VISIBLE_DEVICES=$device python train.py \
+CUDA_VISIBLE_DEVICES=$device python train_wscl.py \
 "model ./models/Causal_CRN_SPL_target/model.yaml" \
 "dataloader ./dataloader/data_loader.yaml" \
 "hyparam ./hyparam/train.yaml" \

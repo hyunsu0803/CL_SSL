@@ -48,7 +48,7 @@ class synth_data_loader(datamake):
         # become torch.tensor
         vad, azi_list = self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)   
         
-        return torch.from_numpy(mixed), vad, azi_list, data_dict['num_spk'], pkl_idx
+        return torch.from_numpy(mixed), vad, azi_list
     
     
 class real_data_loader(datamake):

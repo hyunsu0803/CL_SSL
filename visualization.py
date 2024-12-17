@@ -7,19 +7,6 @@ import importlib
 from tqdm import tqdm
 from dataloader.wrap_dataload import Synth_dataload, Real_dataload
 import matplotlib.pyplot as plt
-import metric
-import soundfile as sf
-from scipy.signal import spectrogram, resample
-
-from matplotlib.cm import ScalarMappable
-from matplotlib.colors import Normalize
-from matplotlib.patches import Circle
-
-from multiprocessing import Pool
-import tempfile
-import imageio
-from PIL import Image
-from io import BytesIO
 
 
 class Hyparam_set():
@@ -170,6 +157,21 @@ class Tester():
         # self.utils=Utils_for_demo()
         
     
+    def permute_n_augment(self, mixed, vad, speech_azi):
+        
+        mixed = mixed.reshape(-1, mixed.shape[-2], mixed.shape[-1])
+        vad = vad.reshape(-1, vad.shape[-2], vad.shape[-1])
+        speech_azi = speech_azi.reshape(-1, speech_azi.shape[-1])
+            
+        perm = torch.randperm(mixed.size(0))  # 무작위 인덱스 생성 (size : 256)
+        
+        mixed = mixed.index_select(0, perm)  
+        vad = vad.index_select(0, perm)  
+        speech_azi = speech_azi.index_select(0, perm)
+        
+        return mixed, vad, speech_azi
+        
+    
     def run(self, ):
       
         size = len(os.listdir(self.args['hyparam']['model_dir']))
@@ -185,103 +187,51 @@ class Tester():
 
             with torch.no_grad():
                 
-                # mixed : (1, 4, 64000)
-                # speech_azi : (1, 1)
+                # mixed : (1, 4, 4, 64000)
+                # speech_azi : (1, 4, 1)
                 # num_spk : (1)
-                # vad : (1, 1, 64000)
-                for iter_num, (mixed, vad, speech_azi, num_spk, pkl_idx) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
+                # vad : (1, 4, 1, 64000)
+                for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
+                    if iter_num % 10 != 0:
+                        continue
+                    mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
                     
                     mixed=mixed.to(self.hyperparameter.device)
                     vad=vad.to(self.hyperparameter.device)
                     speech_azi=speech_azi.to(self.hyperparameter.device)
     
 
-                    out, target, vad=self.model(mixed, vad, speech_azi, iter_num, epoch=0, mic_type='miyungpa')
+                    out = self.model(mixed, vad, speech_azi, iter_num, epoch=0, mic_type='miyungpa')
 
-                    out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot                    
-                    target=target.cpu().numpy()                 # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot
-                    vad=vad.cpu().numpy()
-                    speech_azi=speech_azi.cpu().numpy()         # (B, 1)
-                    mixed=mixed.cpu().numpy()                   # (B, 4, 64000)
-
-                    ans_azi_output = out[0,2].argmax()
-                    ans_azi_target = target[0,2].argmax()
-                    error = abs(ans_azi_output - ans_azi_target)
-                    error = min(error, 360-error)
+                    out=out.sigmoid().detach().cpu().numpy()        # (4, 2048)
+                    out=out.reshape(out.shape[0], 64, 32)           # (4, 64, 32)
                     
-                    pkl_idx=pkl_idx[0]
-                    
-                    # ### save as polar histogram
-                    # duration = int(mixed.shape[2] / 44100 * 10) / 10 # in seconds
-                    
-                    # histogram = self.utils.polar_histogram(out)
-                    # plt.title('Sniper azimuth : '+str(speech_azi.item()) + ' / Duration : ' + str(duration) + 's')  
-                    # os.makedirs('/root/mydir/results/pngs/', exist_ok=True)
-                    # plt.savefig('/root/mydir/results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=300)
-                    # plt.close()         
-                    # # exit()
+                    speech_azi=speech_azi.cpu().numpy()             # (4, 1)
                     
                     
-                    ### save as png
-                    # plt.figure()
-                    # plt.subplot(2,1,1)
-                    # plt.imshow(out[0,2], aspect='auto', vmin=0.0, vmax=1.0)
-                    # plt.xlabel('Time frame')
-                    # plt.ylabel('Source angle')
-                    # plt.title('Estimated DOA spatial spectrum')
-                    # plt.subplot(2,1,2)
-                    # plt.imshow(target[0,2], aspect='auto', vmin=0.0, vmax=1.0)
-                    # plt.xlabel('Time frame')
-                    # plt.ylabel('Source angle')
-                    # plt.title('Target DOA spatial spectrum')
-                    # os.makedirs('/root/mydir/results/pngs/', exist_ok=True)
-                    # plt.tight_layout()
-                    # plt.savefig('/root/mydir/results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
-                    # plt.close()
                     
-                    ### save as wav
-                    # os.makedirs('/root/mydir/results/wavs/', exist_ok=True)
-                    # sf.write('/root/mydir/results/wavs/' + pkl_idx.split('.')[0]+ '.wav', mixed[0,0].numpy(), 44100)
                     
-                    ### save as spectrogram
-                    # plt.figure()
-                    # freq, times, sxx = spectrogram(mixed[0,0].numpy(), fs=44100, nperseg=1024, noverlap=512, nfft=1024)
-                    # plt.pcolormesh(times, freq, 10*np.log10(sxx), shading='gouraud')
-                    # plt.xlabel('Time (s)')
-                    # plt.ylabel('Frequency (Hz)')
-                    # plt.title('Mixed spectrogram')
-                    # plt.tight_layout()
-                    # os.makedirs('/root/mydir/results/spectrograms/', exist_ok=True)
-                    # plt.savefig('/root/mydir/results/spectrograms/' + pkl_idx.split('.')[0]+ '.png')
-                    # plt.close()
+                    ## save as png
+                    plt.figure()
+                    plt.subplot(2,2,1)
+                    plt.imshow(out[0], aspect='auto', vmin=0.0, vmax=1.0)
+                    plt.subplot(2,2,2)
+                    plt.imshow(out[1], aspect='auto', vmin=0.0, vmax=1.0)
+                    plt.subplot(2,2,3)
+                    plt.imshow(out[2], aspect='auto', vmin=0.0, vmax=1.0)
+                    plt.subplot(2,2,4)
+                    plt.imshow(out[3], aspect='auto', vmin=0.0, vmax=1.0)
+                    
+                    
+                    os.makedirs('/root/clssl/results/pngs/', exist_ok=True)
+                    plt.tight_layout()
+                    plt.savefig('/root/clssl/results/pngs/' + str(speech_azi[0, 0])+ '.png', dpi=600)
+                    plt.close()
+            
+                    
+                    self.learner.memory_delete([mixed, vad, speech_azi, out])
                   
-
-                    # total_argmax_acc, \
-                    # total_softmax_acc, \
-                    # total_half_softmax_acc, \
-                    # total_argmax_doa_error, \
-                    # total_softmax_doa_error,\
-                    # total_half_softmax_doa_error, \
-                    # number_of_degrees_to_estimate   =   metric.mae.calc_rmsae(out, target, vad, num_spk, speech_azi,\
-                    #     calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
-                    #         acc_threshold=self.args['hyparam']['acc_threshold'],\
-                    #             local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
-
-                    # total_argmax_doa_error=(total_argmax_doa_error/number_of_degrees_to_estimate)**0.5
-                    # self.logger.error_update(room_type, 
-                    #                          total_argmax_acc, 
-                    #                          total_softmax_acc,
-                    #                          total_half_softmax_acc, 
-                    #                          total_argmax_doa_error, 
-                    #                          total_softmax_doa_error, 
-                    #                          total_half_softmax_doa_error,
-                    #                          number_of_degrees_to_estimate)
-
-                    self.logger.error_update(error)
-                    
-                    self.learner.memory_delete([mixed, vad, speech_azi, out, target,])
-                  
-                self.logger.save_output(epoch)
+                # self.logger.save_output(epoch)
                 self.logger.config()
 
             break
@@ -292,11 +242,11 @@ class Tester():
 if __name__=='__main__':
     args=sys.argv[1:]
 
-    args = ['model /root/mydir/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
-            'dataloader /root/mydir/SSL_src/dataloader/data_loader.yaml', 
-            'hyparam /root/mydir/SSL_src/hyparam/test.yaml', 
-            'learner /root/mydir/SSL_src/hyparam/learner.yaml', 
-            'logger /root/mydir/SSL_src/hyparam/logger.yaml']
+    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
+            'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
+            'hyparam /root/clssl/SSL_src/hyparam/test.yaml', 
+            'learner /root/clssl/SSL_src/hyparam/learner.yaml', 
+            'logger /root/clssl/SSL_src/hyparam/logger.yaml']
     args=util.util.get_yaml_args(args)    
     
     t=Tester(args)

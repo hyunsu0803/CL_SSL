@@ -40,7 +40,7 @@ CRN:
   # fft_freq_bin_num: 513
 
   CNN:
-    layer_num: 3
+    layer_num: 4
     kernel_size: [3,3] # F X T
     filter: 64
 
@@ -49,17 +49,17 @@ CRN:
       stride: [2,1]
   
   GRU:
-    # input_size: 512
-    input_size: 192
+    input_size: 256
+    # input_size: 192
     # hidden_size: 256
     hidden_size: 256
-    num_layers: 2
+    num_layers: 3
     batch_first: True
     dropout: 0.0
     bidirectional: True
 
   GRU_init:
-    shape: [2, 1,  256]
+    shape: [3, 1,  256]
     learnable: False
     
   
