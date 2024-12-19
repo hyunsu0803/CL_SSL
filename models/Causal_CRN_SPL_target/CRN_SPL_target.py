@@ -7,6 +7,7 @@ import math
 import librosa
 import torchaudio.transforms as T
 from .CL_CRN import main_model_for_scl
+import importlib
     
     
 class NonCausal_Conv2D_Block(nn.Module):
@@ -94,7 +95,7 @@ class crn(nn.Module):
         self.max_pool_stride=config['CNN']['max_pool']['stride']
 
         # args = [2*(config['input_audio_channel']-1),  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
-        args = [6,  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
+        args = [1,  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
        
         # kwargs={'stride': 1, 'padding': [1,2], 'dilation': 1}
         kwargs = {'stride': 1, 'padding': (self.kernel_size[0] // 2, self.kernel_size[1] // 2), 'dilation': 1}
@@ -127,11 +128,16 @@ class crn(nn.Module):
         self.azi_mapping_conv_layer=nn.ModuleList()
         self.azi_mapping_final=nn.ModuleList()
 
-        args[0]=config['GRU']['hidden_size']
-        args[1]=config['GRU']['hidden_size']
+        args[0]=512
+        args[1]=501
         args[2]=1
         kwargs['padding']=0
-      
+        
+        self.time_mapping_conv_layer=Conv1D_Block(*args, **kwargs)
+
+
+        args[0]=config['GRU']['hidden_size']
+        args[1]=config['GRU']['hidden_size']
         for _ in range(output_num):
             self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
             self.azi_mapping_final.append(nn.Conv1d(config['GRU']['hidden_size'], self.azi_size, 1))
@@ -181,28 +187,29 @@ class crn(nn.Module):
             x=pooling_layer(x)
  
         
-        b, c, f, t=x.shape              # (B, 64, 3, 690)
-        x=x.view(b, -1, t).permute(0,2,1)
+        b, c, f, t=x.shape                  # (B, 64, 4, 32)
+        x=x.view(b, -1, t)#.permute(0,2,1)   # (B, 256, 32)
 
         h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  # h0 : (2*num_layers, B, hidden_size)
         
         self.GRU_layer.flatten_parameters()
         
-        x, h=self.GRU_layer(x, h0)      # (B, t, 256(hidden size))
-        # x=x.permute(0,2,1)              # (B, 512, 690)
-        outputs=[]
+        x, h=self.GRU_layer(x, h0)      # (B, 256, 512)
         
+        x = x.permute(0, 2, 1)                    # (B, 512, 256)
+        x = self.time_mapping_conv_layer(x)     # (B, 501, 256)    
+        x = x.permute(0, 2, 1)                  # (B, 256, 501) 
         
         
         ### time axis compression
-        #                        x.shape: (B, 690, 512)
-        cnn_layer=self.azi_mapping_conv_layer[0]
-        x=cnn_layer(x)                  # (B, 64, 512)
-        cnn_layer=self.azi_mapping_conv_layer[1]
-        x=cnn_layer(x)                  # (B, 1, 512)
+        #                        x.shape: 
+        # cnn_layer=self.azi_mapping_conv_layer[0]
+        # x=cnn_layer(x)                  
+        # cnn_layer=self.azi_mapping_conv_layer[1]
+        # x=cnn_layer(x)                  
         
         
-        x=x.permute(0,2,1)              # (B, 512, 1)
+        # x=x.permute(0,2,1)              # (B, 256, 512)
         
         ### channel axis compression
         # final_layer=self.azi_mapping_final[0]
@@ -231,9 +238,11 @@ class crn(nn.Module):
 
 
 class main_model_for_doa(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, config_scl, hyparam):
         super(main_model_for_doa, self).__init__()
         self.config=config
+        self.config_scl=config_scl
+        self.hyparam=hyparam
         
         self.eps=np.finfo(np.float32).eps
         self.ref_ch=self.config['ref_ch']
@@ -251,6 +260,7 @@ class main_model_for_doa(nn.Module):
         self.epoch_count=0
         self.now_epoch=0
 
+        self.trained_scl_model_path = self.hyparam['trained_scl_model_path']
        
         ######
        
@@ -259,10 +269,23 @@ class main_model_for_doa(nn.Module):
         self.azi_size=360//self.degree_resolution
 
         self.stft_model=ConvSTFT(**self.config['FFT'])
-        self.scl_model = main_model_for_scl()
+        self.model_select_for_scl_feature()     # self.scl_model
         self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
     
 
+    def model_select_for_scl_feature(self):
+        model_name=self.config_scl['name']
+        model_import='models.'+model_name+'.main'
+
+        model_dir=importlib.import_module(model_import)
+        
+        self.scl_model=model_dir.get_model_for_scl(self.config_scl)#.to(self.device)
+
+        trained=torch.load(self.trained_scl_model_path)#, map_location=self.device)     
+        self.scl_model.load_state_dict(trained['model_state_dict'], )                       
+        self.scl_model=torch.nn.DataParallel(self.scl_model, self.hyparam['GPGPU']['device_ids'])       
+        self.scl_model.eval()
+        
 
     def sigma_update(self, iter_num, epoch):
         if iter_num%500==0:
@@ -419,11 +442,11 @@ class main_model_for_doa(nn.Module):
 
         # feature, vad_frame=self.irtf_feature(mixed, vad)
          
-        feature, vad_frame=self._get_gcc(mixed, vad)
-        
-        feature = self.scl_model(feature)       # dimension???
-
-        out=self.crn(feature)   # (B, 3, 360)
+        # feature, vad_frame=self._get_gcc(mixed, vad)
+        with torch.no_grad():
+            feature, vad_frame = self.scl_model(mixed, vad)         # (B, 2048)
+        feature = feature.reshape(-1, 1, 64, 32)                # (B, 1, 64, 32)
+        out=self.crn(feature)   # (B, 3, 360, 512)
         
         if LOCATA:
             target=self.stft_model.azimuth_strided(vad_frame, azi).unsqueeze(0)
@@ -436,7 +459,7 @@ class main_model_for_doa(nn.Module):
             
         else:
             target=self.make_target( vad_frame, azi, iter_num, epoch)
-            target, _ = torch.max(target, dim=3)   # (B, 3, 360)
+            # target, _ = torch.max(target, dim=3)   # (B, 3, 360)
         
         # if mic_type=='linear':
         #     target=self.target_flip(target)

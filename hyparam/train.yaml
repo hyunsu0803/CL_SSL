@@ -8,4 +8,5 @@ resume_epoch: 0
 GPGPU:
   device_ids: [0]
 
-model: /root/mydir/results/model_checkpoint/49_model.tar  # only for fine-tuning
+# model: /root/mydir/results/model_checkpoint/49_model.tar  # only for fine-tuning
+trained_scl_model_path : /root/clssl/results_scl_32*8/model_checkpoint/best_model.tar   # for scl

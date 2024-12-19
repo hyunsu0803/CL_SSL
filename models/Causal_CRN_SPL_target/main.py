@@ -6,6 +6,6 @@ def get_model_for_scl(args):
     return main_model_for_scl(args)
 
 
-def get_model_for_doa(args):
+def get_model_for_doa(args, args_scl, hyparam):
 
-    return main_model_for_doa(args)
+    return main_model_for_doa(args, args_scl, hyparam)

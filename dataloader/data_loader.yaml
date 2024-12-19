@@ -75,7 +75,7 @@ train:
 val:
   loader:
 
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/val/
+    pkl_dir: /root/clssl/SSL_src/prepared/pkl/doa/
 
     num_spk: 1  # for real DataLoader
     ans_azi: 0                                        
@@ -164,7 +164,7 @@ val:
   
 test:
   loader:
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/scl/ 
+    pkl_dir: /root/clssl/SSL_src/prepared/pkl/doa/ 
   
 
     ans_azi: 0

@@ -70,7 +70,7 @@ class Learner_config():
 
         model_dir=importlib.import_module(model_import)
         
-        self.model=model_dir.get_model(self.args['model']).to(self.device)
+        self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
 
         trained=torch.load(self.args['hyparam']['model'], map_location=self.device)     # only for infer
         self.model.load_state_dict(trained['model_state_dict'], )                       # only for infer
@@ -108,20 +108,20 @@ class Logger_config():
 
     def save_output(self, epoch):
         
-        squared_error_sum = self.save_config_dict['squared_error_sum']
+        total_error_sum = self.save_config_dict['total_error_sum']
         number_of_degrees = self.save_config_dict['number_of_degrees']
-        rmsae = (squared_error_sum/number_of_degrees)**0.5
-        print(f"총성 방향 추정 RMSAE : {rmsae:.2f}\n\n\n\n\n")
+        MAE = total_error_sum/number_of_degrees
+        print(f"음성 방향 추정 MAE : {MAE:.2f}\n")
         os.makedirs(self.result_folder['inference_folder']+ self.room_type[0], exist_ok=True)
-        with open(self.result_folder['inference_folder']+ self.room_type[0]+f'/{epoch}_result_{rmsae:.1f}.txt', 'w') as f:
+        with open(self.result_folder['inference_folder']+ self.room_type[0]+f'/{epoch}_result_{MAE:.1f}.txt', 'w') as f:
 
             f.write('\nargmax_doa_error\n')
-            f.write(str(rmsae)+'\n')
+            f.write(str(MAE)+'\n')
 
     
     def error_update(self, argmax_doa_error):
         
-        self.save_config_dict['squared_error_sum'] += argmax_doa_error**2
+        self.save_config_dict['total_error_sum'] += argmax_doa_error
         self.save_config_dict['number_of_degrees'] += 1
 
   
@@ -129,7 +129,7 @@ class Logger_config():
         
         self.save_config_dict=dict()
 
-        self.save_config_dict['squared_error_sum']=0
+        self.save_config_dict['total_error_sum']=0
         self.save_config_dict['number_of_degrees']=0
 
         return self.args
@@ -189,14 +189,14 @@ class Tester():
                 # speech_azi : (1, 1)
                 # num_spk : (1)
                 # vad : (1, 1, 64000)
-                for iter_num, (mixed, vad, speech_azi, num_spk, pkl_idx) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
+                for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
                     
                     mixed=mixed.to(self.hyperparameter.device)
                     vad=vad.to(self.hyperparameter.device)
                     speech_azi=speech_azi.to(self.hyperparameter.device)
     
 
-                    out, target, vad=self.model(mixed, vad, speech_azi, iter_num, epoch=0, mic_type='miyungpa')
+                    out, target=self.model(mixed, vad, speech_azi, iter_num, epoch=0, mic_type='miyungpa')
 
                     out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot                    
                     target=target.cpu().numpy()                 # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot
@@ -204,12 +204,15 @@ class Tester():
                     speech_azi=speech_azi.cpu().numpy()         # (B, 1)
                     mixed=mixed.cpu().numpy()                   # (B, 4, 64000)
 
-                    ans_azi_output = out[0,2].argmax()
-                    ans_azi_target = target[0,2].argmax()
-                    error = abs(ans_azi_output - ans_azi_target)
+
+                    output_azi = out[0,2].mean(axis=1).argmax()
+                    ans_azi = speech_azi[0,0]
+                    
+                    error = abs(output_azi - ans_azi)
                     error = min(error, 360-error)
                     
-                    pkl_idx=pkl_idx[0]
+                    # pkl_idx=pkl_idx[0]
+                    pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
                     
                     # ### save as polar histogram
                     # duration = int(mixed.shape[2] / 44100 * 10) / 10 # in seconds
@@ -222,7 +225,7 @@ class Tester():
                     # # exit()
                     
                     
-                    ### save as png
+                    # ## save as png
                     # plt.figure()
                     # plt.subplot(2,1,1)
                     # plt.imshow(out[0,2], aspect='auto', vmin=0.0, vmax=1.0)
@@ -234,9 +237,9 @@ class Tester():
                     # plt.xlabel('Time frame')
                     # plt.ylabel('Source angle')
                     # plt.title('Target DOA spatial spectrum')
-                    # os.makedirs('/root/mydir/results/pngs/', exist_ok=True)
+                    # os.makedirs('/root/clssl/results/pngs/', exist_ok=True)
                     # plt.tight_layout()
-                    # plt.savefig('/root/mydir/results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
+                    # plt.savefig('/root/clssl/results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
                     # plt.close()
                     
                     ### save as wav
@@ -282,7 +285,7 @@ class Tester():
                     self.learner.memory_delete([mixed, vad, speech_azi, out, target,])
                   
                 self.logger.save_output(epoch)
-                self.logger.config()
+                # self.logger.config()
 
             break
 
@@ -292,11 +295,12 @@ class Tester():
 if __name__=='__main__':
     args=sys.argv[1:]
 
-    args = ['model /root/mydir/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
-            'dataloader /root/mydir/SSL_src/dataloader/data_loader.yaml', 
-            'hyparam /root/mydir/SSL_src/hyparam/test.yaml', 
-            'learner /root/mydir/SSL_src/hyparam/learner.yaml', 
-            'logger /root/mydir/SSL_src/hyparam/logger.yaml']
+    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
+            'model_scl /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model_scl.yaml',
+            'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
+            'hyparam /root/clssl/SSL_src/hyparam/test.yaml', 
+            'learner /root/clssl/SSL_src/hyparam/learner.yaml', 
+            'logger /root/clssl/SSL_src/hyparam/logger.yaml']
     args=util.util.get_yaml_args(args)    
     
     t=Tester(args)

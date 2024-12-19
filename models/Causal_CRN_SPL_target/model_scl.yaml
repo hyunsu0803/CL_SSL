@@ -49,7 +49,7 @@ CRN:
       stride: [2,1]
   
   GRU:
-    input_size: 32
+    input_size: 256
     # input_size: 192
     # hidden_size: 256
     hidden_size: 256

@@ -372,6 +372,6 @@ class main_model_for_scl(nn.Module):
         out=self.crn(feature)   # (B, 2048)
         
         
-        return out
+        return out, vad_frame
 
 

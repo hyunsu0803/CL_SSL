@@ -66,7 +66,7 @@ class Learner_config():
         
         model_dir=importlib.import_module(model_import)
         
-        self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
+        self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
         self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])   
         
     def model_select_for_finetune(self):
@@ -117,10 +117,10 @@ class Learner_config():
             self.best_train_loss=-math.inf
 
 
-    def train_update(self, output, labels):
+    def train_update(self, output, target):
             
         output=torch.sigmoid(output)
-        loss = self.loss_func(output, labels)
+        loss = self.loss_func(output, target)
 
         for j in range(len(self.loss_weight)):
             loss[:, j]=loss[:,j]*self.loss_weight[j]
@@ -140,8 +140,8 @@ class Learner_config():
         return loss_mean
 
 
-    def test_update(self, output, labels):
-
+    def test_update(self, output, target):
+        
         target=target[:, self.loss_train_map_num]       # :, [0, 1, 2]
         output=output[:, self.loss_train_map_num].sigmoid()
 
@@ -344,13 +344,13 @@ class Trainer():
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
             
-            out = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
+            out, target = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
             
-            loss = self.learner.train_update(out, speech_azi)
+            loss = self.learner.train_update(out, target)
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
+            self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target])
             
         
         
@@ -374,15 +374,14 @@ class Trainer():
                 vad=vad.to(self.hyperparameter.device)
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
-                with torch.cuda.amp.autocast():
                 
-                    out = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
-                    
-                    loss=self.learner.test_update(out, speech_azi)
+                out, target = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
+                
+                loss=self.learner.test_update(out, target)
                     
                     
                 self.logger.test_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target])
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
             
@@ -391,6 +390,7 @@ if __name__=='__main__':
     args=sys.argv[1:]
     
     args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
+            'model_scl /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model_scl.yaml',
             'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
             'hyparam /root/clssl/SSL_src/hyparam/train.yaml', 
             'learner /root/clssl/SSL_src/hyparam/learner.yaml', 

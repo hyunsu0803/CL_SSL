@@ -319,7 +319,7 @@ class base_data_maker(datamake):
         # vad & azi_list == torch.tensor
         vad, azi_list=self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)
         
-        return torch.from_numpy(mixed), vad, azi_list, num_spk, fs, white_noise_snr
+        return torch.from_numpy(mixed), vad, azi_list, white_noise_snr
     
     def arrange_data(self, idx):
         azimuth_deg = idx
