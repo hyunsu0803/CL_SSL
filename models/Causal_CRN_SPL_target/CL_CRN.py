@@ -100,13 +100,14 @@ class crn(nn.Module):
         num_layers = config['GRU_init']['shape'][0]  # 3
         hidden_size = config['GRU_init']['shape'][-1]  # 256
 
-        self.h0 = torch.zeros(num_layers * 2, 1, hidden_size)  # [6, 1, 256]
+        # self.h0 = torch.zeros(num_layers * 2, 1, hidden_size)  # [6, 1, 256]
+        self.h0 = torch.zeros(*config['GRU_init']['shape'])  # 
         self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
         
 
 
         ##############################
-        # output layer
+        # projection layer
         ##############################
         self.time_comp_layer=nn.ModuleList()
         kwargs['padding']=1
@@ -117,22 +118,11 @@ class crn(nn.Module):
         
 
         self.channel_comp_layer=nn.ModuleList()
-        args = [512, 128, 3]    
+        args = [256, 128, 3]    
         self.channel_comp_layer.append(Conv1D_Block(*args, **kwargs))
         args = [128, 64, 3]     
         self.channel_comp_layer.append(Conv1D_Block(*args, **kwargs))
-
-        # Final linear transformation to (32, 32)
-        # self.feat_mapping_final = nn.Conv1d(in_channels=493, out_channels=32, kernel_size=1, padding=0)
         
-        ##############################
-        # projection layer
-        ##############################
-        self.head = nn.Sequential(
-                nn.Linear(2048, 2048),
-                nn.ReLU(inplace=True),
-                nn.Linear(2048, 128)
-            )
     
      
 
@@ -141,7 +131,7 @@ class crn(nn.Module):
         ##############################
         # CNN layer
         ##############################
-        # x: (B, 6, 26, 501)
+        # x: (B, 6, 256, 501)
         for cnn_layer, pooling_layer in zip(self.cnn, self.pooling):
             x=cnn_layer(x)[...,:x.shape[-1]]    # (B, 64, 64, 501)  (B, 64, 32, 501)    (B, 64, 6, 501)
             x=pooling_layer(x)                  # (B, 64, 32, 501)  (B, 64, 16, 501)    (B, 64, 3, 501)
@@ -150,13 +140,14 @@ class crn(nn.Module):
         ##############################
         # GRU layer
         ##############################
-        b, c, f, t = x.shape                  # (B, 64, 3, 501)
-        x = x.view(b, -1, t).permute(0,2,1)   # (B, 501, 192)
+        b, c, f, t = x.shape                  # (B, 64, 16, 501)
+        x = x.view(b, -1, t).permute(0,2,1)   # (B, 501, 1024)
 
-        h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  # h0 : (2*gru_num_layers, B, hidden_size) (4, mB, 256)
+        h0 = self.h0.repeat_interleave(x.shape[0])  # h0 : (2*gru_num_layers, B, hidden_size) (3, B, 256)
+        h0 = h0.view(self.h0.shape[0], x.shape[0], self.h0.shape[-1])  # (3, B, 256)
         self.GRU_layer.flatten_parameters()
         
-        x, h=self.GRU_layer(x, h0)      # (B, 501, 512(hidden size))
+        x, h=self.GRU_layer(x, h0)      # (B, 501, 256(hidden size))
         # x=x.permute(0,2,1)              
 
         
@@ -164,8 +155,8 @@ class crn(nn.Module):
         # output layer
         ##############################
         for cnn_layer in self.time_comp_layer:
-            x = cnn_layer(x)  # Reduce along the time axis (B, 128, 512), (B, 32, 512)
-        x = x.permute(0, 2, 1)  # (B, 32, 512) -> (B, 512, 32)
+            x = cnn_layer(x)  # Reduce along the time axis (B, 128, 256), (B, 32, 256)
+        x = x.permute(0, 2, 1)  # (B, 32, 256) -> (B, 256, 32)
         for cnn_layer in self.channel_comp_layer:
             x = cnn_layer(x) # Reduce along the channel axis (B, 128, 32), (B, 64, 32)
 
@@ -317,9 +308,9 @@ class main_model_for_scl(nn.Module):
         
         r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
         comp = torch.complex(r, i)  # B x C x F x T
-        comp = comp[:, :, :33, :]
+        # comp = comp[:, :, :33, :]
         
-        linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C = (B, 501, 26, 4)
+        linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C = (B, 501, 129, 4)
         
         # self._nb_mel_bins = 64  
         
@@ -327,12 +318,12 @@ class main_model_for_scl(nn.Module):
         for m in range(linear_spectra.shape[-1]):
             for n in range(m+1, linear_spectra.shape[-1]):
                 R = torch.conj(linear_spectra[:, :, :, m]) * linear_spectra[:, :, :, n]        
-                cc = torch.fft.irfft(torch.exp(1.j*torch.angle(R)), dim=-1)      # (B, T, 2*(F-1)) (B, 501, 64)
-                # cc.shape (B, 345, 64)
+                cc = torch.fft.irfft(torch.exp(1.j*torch.angle(R)), dim=-1)      # (B, T, 2*(F-1)) (B, 501, 256)
+                # cc.shape (B, 345, 256)
                 gcc_feat.append(cc)
         
-        gcc_feat = torch.stack(gcc_feat, dim=-1)      # (B, 501, 64, 6)
-        gcc_feat = gcc_feat.permute(0, 3, 2, 1)         # (B, 6, 64, 501)
+        gcc_feat = torch.stack(gcc_feat, dim=-1)      # (B, 501, 256, 6)
+        gcc_feat = gcc_feat.permute(0, 3, 2, 1)         # (B, 6, 256, 501)
 
         return gcc_feat, vad_frame
 
@@ -372,6 +363,6 @@ class main_model_for_scl(nn.Module):
         out=self.crn(feature)   # (B, 2048)
         
         
-        return out, vad_frame
+        return out
 
 

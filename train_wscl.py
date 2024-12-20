@@ -358,39 +358,37 @@ class Trainer():
     def train(self, epoch):
 
         self.model.train()
-        # self.optimizer.zero_grad()
 
-        mic_type=self.args['dataloader']['train']['mic_type']
         
-        
-        
-        self.n_room = 8
-        self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
-        for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
-            # mixed : [64, 8, 4, 64000]
-            # vad : [64, 8, 1, 64000]
-            # speech_azi : [64, 8, 1]
-            mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
-            # mixed : [512, 4, 64000]   # 512 되어야 함
-            # vad : [512, 1, 64000]
-            # speech_azi : [512, 1]
+        with torch.cuda.amp.autocast():
             
-            mixed=mixed.to(self.hyperparameter.device)
-            vad=vad.to(self.hyperparameter.device)
-            speech_azi=speech_azi.to(self.hyperparameter.device)
-            
-            
-            with torch.cuda.amp.autocast():
+            self.n_room = 2
+            self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
+            for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+                # mixed : [64, 8, 4, 64000]
+                # vad : [64, 8, 1, 64000]
+                # speech_azi : [64, 8, 1]
+                mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
+                # mixed : [512, 4, 64000]   # 512 되어야 함
+                # vad : [512, 1, 64000]
+                # speech_azi : [512, 1]
                 
+                mixed=mixed.to(self.hyperparameter.device)
+                vad=vad.to(self.hyperparameter.device)
+                speech_azi=speech_azi.to(self.hyperparameter.device)
+                
+                
+                
+                    
                 out = self.model(mixed, vad)
                 
                 loss = self.learner.train_update(out, speech_azi)
-                
+                    
 
-            self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
-            
-            self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
+                self.logger.train_iter_log(loss)
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
+                
+                self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         
         
         self.logger.train_epoch_log()
@@ -399,30 +397,31 @@ class Trainer():
     def validation(self, epoch):
         self.model.eval()
         
-        mic_type=self.args['dataloader']['val']['loader']['mic_type']
+        torch.cuda.empty_cache()
         
-        with torch.no_grad():
-            
-            # mixed : (16, 4, 64000)
-            # speech_azi : (16, 1)
-            # num_spk : (16)
-            for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
+        with torch.cuda.amp.autocast():
+            with torch.no_grad():
                 
-                mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
-                
-                mixed=mixed.to(self.hyperparameter.device)
-                vad=vad.to(self.hyperparameter.device)
-                speech_azi=speech_azi.to(self.hyperparameter.device)
+                # mixed : (16, 4, 64000)
+                # speech_azi : (16, 1)
+                # num_spk : (16)
+                for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
+                    
+                    mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
+                    
+                    mixed=mixed.to(self.hyperparameter.device)
+                    vad=vad.to(self.hyperparameter.device)
+                    speech_azi=speech_azi.to(self.hyperparameter.device)
 
-                with torch.cuda.amp.autocast():
-                
-                    out = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
+                    
+                    
+                    out = self.model(mixed, vad)
                     
                     loss=self.learner.test_update(out, speech_azi)
-                    
-                    
-                self.logger.test_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
+                        
+                        
+                    self.logger.test_iter_log(loss)
+                    self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
             
@@ -430,7 +429,7 @@ class Trainer():
 if __name__=='__main__':
     args=sys.argv[1:]
     
-    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
+    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model_scl.yaml', 
             'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
             'hyparam /root/clssl/SSL_src/hyparam/train.yaml', 
             'learner /root/clssl/SSL_src/hyparam/learner.yaml', 

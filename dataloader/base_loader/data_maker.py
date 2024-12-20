@@ -330,8 +330,11 @@ class base_data_maker(datamake):
         azi_list_list = []
         
         for room_info in self.rooms:
-            # tensor, tensor, tensor,   int, int, float     # tensor는 model에 들어감
-            mixed, vad, azi_list,       num_spk, fs, white_noise_snr = self.make_data(room_info, azimuth_deg, with_coherent_noise=False)
+            # tensor, tensor, tensor,   float     # tensor는 model에 들어감
+            mixed, vad, azi_list, white_noise_snr = self.make_data(idx=None, 
+                                                                    room_info=room_info, 
+                                                                    azimuth_deg=azimuth_deg, 
+                                                                    with_coherent_noise=False)
             mixed_list.append(mixed)
             vad_list.append(vad)
             azi_list_list.append(azi_list)
@@ -347,7 +350,7 @@ class base_data_maker(datamake):
     
     def __getitem__(self, idx):
         # print(idx, end=' ')
-        return self.make_data(idx)
+        return self.make_data(idx=idx)
     
 
 """ train """

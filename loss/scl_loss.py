@@ -93,13 +93,13 @@ class Weighted_SupConLoss(nn.Module):
 
         batch_size = features.shape[0]
         
-        # labels: (512,)                  
-        labels = labels.contiguous().view(-1, 1)    # (256, 1)
+        # labels: (B,)                  
+        labels = labels.contiguous().view(-1, 1)    # (B, 1)
         if labels.shape[0] != batch_size:
             raise ValueError('Num of labels does not match num of features')
         
         # mask = self.generate_mask(labels).to(self.device)         # (256, 256)
-        mask = torch.eq(labels, labels.T).float().to(self.device)
+        mask = torch.eq(labels, labels.T).float().to(self.device)   # (B, B)
         
 
         contrast_feature = features

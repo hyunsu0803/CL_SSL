@@ -104,7 +104,7 @@ class Trainer():
 if __name__=='__main__':
     args=sys.argv[1:]
     
-    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model.yaml', 
+    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model_doa.yaml', 
             'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
             'hyparam /root/clssl/SSL_src/hyparam/train.yaml', 
             'learner /root/clssl/SSL_src/hyparam/learner.yaml', 
