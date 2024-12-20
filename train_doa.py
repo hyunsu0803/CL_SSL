@@ -66,7 +66,13 @@ class Learner_config():
         
         model_dir=importlib.import_module(model_import)
         
-        self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
+        if self.args['model']['SCL']:
+            self.args['model']['CRN']['input_cnn_channel'] = 1
+            self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
+            
+        else:
+            self.args['model']['CRN']['input_cnn_channel'] = 6
+            self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
         self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])   
         
     def model_select_for_finetune(self):
@@ -333,7 +339,7 @@ class Trainer():
         self.model.train()
         # self.optimizer.zero_grad()
 
-        mic_type=self.args['dataloader']['train']['mic_type']
+        # mic_type=self.args['dataloader']['train']['mic_type']
         
         
         for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
@@ -344,7 +350,7 @@ class Trainer():
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
             
-            out, target = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
+            out, target = self.model(mixed, vad, speech_azi, iter_num, epoch)
             
             loss = self.learner.train_update(out, target)
                 
@@ -360,7 +366,7 @@ class Trainer():
     def validation(self, epoch):
         self.model.eval()
         
-        mic_type=self.args['dataloader']['val']['loader']['mic_type']
+        # mic_type=self.args['dataloader']['val']['loader']['mic_type']
         
         with torch.no_grad():
             
@@ -375,7 +381,7 @@ class Trainer():
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
                 
-                out, target = self.model(mixed, vad, speech_azi, iter_num, epoch, mic_type)
+                out, target = self.model(mixed, vad, speech_azi, iter_num, epoch)
                 
                 loss=self.learner.test_update(out, target)
                     

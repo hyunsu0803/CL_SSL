@@ -94,8 +94,7 @@ class crn(nn.Module):
         self.max_pool_kernel=config['CNN']['max_pool']['kernel_size']
         self.max_pool_stride=config['CNN']['max_pool']['stride']
 
-        # args = [2*(config['input_audio_channel']-1),  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
-        args = [1,  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
+        args = [config['input_cnn_channel'],  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
        
         # kwargs={'stride': 1, 'padding': [1,2], 'dilation': 1}
         kwargs = {'stride': 1, 'padding': (self.kernel_size[0] // 2, self.kernel_size[1] // 2), 'dilation': 1}
@@ -128,57 +127,21 @@ class crn(nn.Module):
         self.azi_mapping_conv_layer=nn.ModuleList()
         self.azi_mapping_final=nn.ModuleList()
 
-        args[0]=512
-        args[1]=501
+
+        args[0]=config['GRU']['hidden_size'] * 2
+        args[1]=config['GRU']['hidden_size']
         args[2]=1
         kwargs['padding']=0
         
-        self.time_mapping_conv_layer=Conv1D_Block(*args, **kwargs)
-
-
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
+        self.azi_mapping_final.append(nn.Conv1d(config['GRU']['hidden_size'], self.azi_size, 1))
+        
         args[0]=config['GRU']['hidden_size']
-        args[1]=config['GRU']['hidden_size']
-        for _ in range(output_num):
+        for _ in range(output_num -1):
             self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
             self.azi_mapping_final.append(nn.Conv1d(config['GRU']['hidden_size'], self.azi_size, 1))
 
-        # (B, 512, 690) => (B, 360)
-        # args[0] = 690  # input channel
-        # args[1] = 32    # output channel
-        # args[2] = (3, 3)          # kernel size      
-        # kwargs['padding'] = (0, 0)
-        # self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        # self.azi_mapping_final.append(nn.Conv2d(args[1], self.azi_size, (1, 1)))
-        
-        # args[0]=32     #   input channel
-        # args[1]=32     #   output channel
-        # for _ in range(output_num-1):
-        #     self.azi_mapping_conv_layer.append(Conv2D_Block(*args, **kwargs))
-        #     self.azi_mapping_final.append(nn.Conv2d(args[1], self.azi_size, (1, 1)))
-        
-        
-        # kwargs['padding'] = 0
-        # args[0] = 690
-        # args[1] = 64
-        # args[2] = 1
-        # # args1 = [690, 64, 1]    # in_channel, out_channel, kernel size
-        # self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        # args[0] = 64
-        # args[1] = 1
-        # args[2] = 1
-        # # args2 = [64, 1, 1]
-        # self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        # self.azi_mapping_final.append(nn.Conv1d(in_channels=512, out_channels=self.azi_size, kernel_size=1, padding=0))
-        
-        # args[0] = 512
-        # args[1] = 512
-        # args[2] = 1
-        # # args3 = [512, 512, 1]
-        # for _ in range(output_num-1):
-        #     self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        #     self.azi_mapping_final.append(nn.Conv1d(in_channels=512, out_channels=self.azi_size, kernel_size=1, padding=0))
-     
-     
+
 
     def forward(self, x):
       
@@ -187,43 +150,17 @@ class crn(nn.Module):
             x=pooling_layer(x)
  
         
-        b, c, f, t=x.shape                  # (B, 64, 4, 32)
-        x=x.view(b, -1, t)#.permute(0,2,1)   # (B, 256, 32)
+        b, c, f, t=x.shape                  # (B, 64, 4, 32) or (B, 64, 4, 501)
+        x=x.view(b, -1, t).permute(0,2,1)   # (B, 32, 256) or (B, 501, 256)
 
         h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  # h0 : (2*num_layers, B, hidden_size)
         
         self.GRU_layer.flatten_parameters()
         
-        x, h=self.GRU_layer(x, h0)      # (B, 256, 512)
+        x, h=self.GRU_layer(x, h0)      # (B, 32?, 512) or (B, 501, 512)
+           
+        x = x.permute(0, 2, 1)                  # (B, 512, 32) or (B, 512, 501)
         
-        x = x.permute(0, 2, 1)                    # (B, 512, 256)
-        x = self.time_mapping_conv_layer(x)     # (B, 501, 256)    
-        x = x.permute(0, 2, 1)                  # (B, 256, 501) 
-        
-        
-        ### time axis compression
-        #                        x.shape: 
-        # cnn_layer=self.azi_mapping_conv_layer[0]
-        # x=cnn_layer(x)                  
-        # cnn_layer=self.azi_mapping_conv_layer[1]
-        # x=cnn_layer(x)                  
-        
-        
-        # x=x.permute(0,2,1)              # (B, 256, 512)
-        
-        ### channel axis compression
-        # final_layer=self.azi_mapping_final[0]
-        # res_output=final_layer(x)       # (B, 360, 1)
-        # outputs.append(res_output.squeeze(-1))
-        
-        # for cnn_layer, final_layer in zip(self.azi_mapping_conv_layer[2:], self.azi_mapping_final[1:]):
-        #     x=cnn_layer(x)              # (B, 512, 1)           
-        #     res_output=final_layer(x)   # (B, 360, 1)
-        #     outputs.append(res_output.squeeze(-1))
-            
-        # output=torch.stack(outputs).permute(1,0,2)  # (3, B, 360) -> (B, 3, 360)
-        
-        # return output
         
         outputs=[]
 
@@ -238,9 +175,10 @@ class crn(nn.Module):
 
 
 class main_model_for_doa(nn.Module):
-    def __init__(self, config, config_scl, hyparam):
+    def __init__(self, config, config_scl=None, hyparam=None):
         super(main_model_for_doa, self).__init__()
         self.config=config
+        self.use_scl = self.config['SCL']
         self.config_scl=config_scl
         self.hyparam=hyparam
         
@@ -260,8 +198,6 @@ class main_model_for_doa(nn.Module):
         self.epoch_count=0
         self.now_epoch=0
 
-        self.trained_scl_model_path = self.hyparam['trained_scl_model_path']
-       
         ######
        
         # self.max_spk=self.config['max_spk']
@@ -269,8 +205,13 @@ class main_model_for_doa(nn.Module):
         self.azi_size=360//self.degree_resolution
 
         self.stft_model=ConvSTFT(**self.config['FFT'])
-        self.model_select_for_scl_feature()     # self.scl_model
+        
         self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
+        
+        if self.use_scl:
+            self.model_select_for_scl_feature()     # self.scl_model
+            self.trained_scl_model_path = self.hyparam['trained_scl_model_path']
+       
     
 
     def model_select_for_scl_feature(self):
@@ -404,12 +345,12 @@ class main_model_for_doa(nn.Module):
         for m in range(linear_spectra.shape[-1]):
             for n in range(m+1, linear_spectra.shape[-1]):
                 R = torch.conj(linear_spectra[:, :, :, m]) * linear_spectra[:, :, :, n]        
-                cc = torch.fft.irfft(torch.exp(1.j*torch.angle(R)), dim=-1)      # (B, T, 2*(F-1)) (B, 345, 1024)
+                cc = torch.fft.irfft(torch.exp(1.j*torch.angle(R)), dim=-1)      # (B, T, 2*(F-1)) (B, 501, 64)
                 # cc.shape (B, 345, 64)
                 gcc_feat.append(cc)
         
-        gcc_feat = torch.stack(gcc_feat, dim=-1)      # (B, 690, 50, 6)
-        gcc_feat = gcc_feat.permute(0, 3, 2, 1)         # (B, 6, 50, 690)
+        gcc_feat = torch.stack(gcc_feat, dim=-1)      # (B, 501, 64, 6)
+        gcc_feat = gcc_feat.permute(0, 3, 2, 1)         # (B, 6, 64, 501)
 
         return gcc_feat, vad_frame
 
@@ -438,14 +379,16 @@ class main_model_for_doa(nn.Module):
         return target
 
         
-    def forward(self, mixed, vad, azi, iter_num, epoch, mic_type, LOCATA=False):
+    def forward(self, mixed, vad, azi, iter_num, epoch, LOCATA=False):
 
-        # feature, vad_frame=self.irtf_feature(mixed, vad)
-         
-        # feature, vad_frame=self._get_gcc(mixed, vad)
-        with torch.no_grad():
-            feature, vad_frame = self.scl_model(mixed, vad)         # (B, 2048)
-        feature = feature.reshape(-1, 1, 64, 32)                # (B, 1, 64, 32)
+        if self.use_scl:
+            with torch.no_grad():
+                feature, vad_frame = self.scl_model(mixed, vad)         # (B, 2048)
+                feature = feature.reshape(-1, 1, 64, 32)                # (B, 1, 64, 32)
+        else:  
+            feature, vad_frame=self._get_gcc(mixed, vad)        # (B, 6, 64, 501)
+            
+        
         out=self.crn(feature)   # (B, 3, 360, 512)
         
         if LOCATA:

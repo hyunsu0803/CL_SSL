@@ -70,8 +70,14 @@ class Learner_config():
 
         model_dir=importlib.import_module(model_import)
         
-        self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
-
+        if self.args['model']['SCL']:
+            self.args['model']['CRN']['input_cnn_channel'] = 1
+            self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
+            
+        else:
+            self.args['model']['CRN']['input_cnn_channel'] = 6
+            self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
+            
         trained=torch.load(self.args['hyparam']['model'], map_location=self.device)     # only for infer
         self.model.load_state_dict(trained['model_state_dict'], )                       # only for infer
         self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])       
@@ -196,7 +202,7 @@ class Tester():
                     speech_azi=speech_azi.to(self.hyperparameter.device)
     
 
-                    out, target=self.model(mixed, vad, speech_azi, iter_num, epoch=0, mic_type='miyungpa')
+                    out, target=self.model(mixed, vad, speech_azi, iter_num, epoch=0)
 
                     out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot                    
                     target=target.cpu().numpy()                 # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot
