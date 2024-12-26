@@ -380,7 +380,7 @@ class Trainer():
                 
                 
                     
-                out = self.model(mixed, vad)
+                out, embedding = self.model(mixed, vad)
                 
                 loss = self.learner.train_update(out, speech_azi)
                     

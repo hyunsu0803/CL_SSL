@@ -148,7 +148,7 @@ class crn(nn.Module):
         self.GRU_layer.flatten_parameters()
         
         x, h=self.GRU_layer(x, h0)      # (B, 501, 256(hidden size))
-        # x=x.permute(0,2,1)              
+        embedding = F.normalize(x.permute(0,2,1), dim=1)    # (B, 256, 501)
 
         
         ##############################
@@ -165,7 +165,7 @@ class crn(nn.Module):
         x = x.view(x.size(0), -1)  # (B, 2048)
         x = F.normalize(x, dim=1)
         
-        return x
+        return x, embedding
 
 
 
@@ -360,9 +360,9 @@ class main_model_for_scl(nn.Module):
         feature, vad_frame=self._get_gcc(mixed, vad)   
         
         # model forward
-        out=self.crn(feature)   # (B, 2048)
+        out, embedding = self.crn(feature)   # (B, 2048)
         
         
-        return out
+        return out, embedding, vad_frame
 
 

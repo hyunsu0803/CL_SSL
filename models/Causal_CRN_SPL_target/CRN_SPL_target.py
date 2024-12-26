@@ -112,15 +112,9 @@ class crn(nn.Module):
             self.cnn.append(NonCausal_Conv2D_Block(*args, **kwargs))
             self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
     
-        self.GRU_layer=nn.GRU(**config['GRU'])                      # bidirectional=True      
-        # self.h0=torch.zeros(*config['GRU_init']['shape'])
-        
-        # Bidirectional GRU를 위한 h0 차원 수정
-        num_layers = config['GRU_init']['shape'][0]  # 3
-        hidden_size = config['GRU_init']['shape'][-1]  # 256
+        self.GRU_layer=nn.GRU(**config['GRU'])                            
 
-        # bidirectional을 고려하여 h0의 shape 변경
-        self.h0 = torch.zeros(num_layers * 2, 1, hidden_size)  # [6, 1, 256]
+        self.h0 = torch.zeros(*config['GRU_init']['shape'])  # [3, 1, 256]
         self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
         
 
@@ -128,7 +122,7 @@ class crn(nn.Module):
         self.azi_mapping_final=nn.ModuleList()
 
 
-        args[0]=config['GRU']['hidden_size'] * 2
+        args[0]=config['GRU']['hidden_size']
         args[1]=config['GRU']['hidden_size']
         args[2]=1
         kwargs['padding']=0
@@ -153,8 +147,8 @@ class crn(nn.Module):
         b, c, f, t=x.shape                  # (B, 64, 4, 32) or (B, 64, 4, 501)
         x=x.view(b, -1, t).permute(0,2,1)   # (B, 32, 256) or (B, 501, 256)
 
-        h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  # h0 : (2*num_layers, B, hidden_size)
-        
+        h0 = self.h0.repeat_interleave(x.shape[0])  # h0 : (2*num_layers, B, hidden_size)
+        h0 = h0.view(self.h0.shape[0], x.shape[0], self.h0.shape[-1])  # (3, B, 256)
         self.GRU_layer.flatten_parameters()
         
         x, h=self.GRU_layer(x, h0)      # (B, 32?, 512) or (B, 501, 512)
@@ -309,7 +303,7 @@ class main_model_for_doa(nn.Module):
         r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
         # B x C x F x T = (B, 4, 513, 345)
         comp = torch.complex(r, i)
-        comp = comp[:, :, :26, :]
+        # comp = comp[:, :, :26, :]
         # print("comp.shape", comp.shape)
         # exit()
         
@@ -335,7 +329,7 @@ class main_model_for_doa(nn.Module):
         r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
         
         comp = torch.complex(r, i)  # B x C x F x T
-        comp = comp[:, :, :33, :]
+        # comp = comp[:, :, :33, :]
         
         linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C
         
@@ -383,7 +377,7 @@ class main_model_for_doa(nn.Module):
 
         if self.use_scl:
             with torch.no_grad():
-                feature, vad_frame = self.scl_model(mixed, vad)         # (B, 2048)
+                _, feature, vad_frame = self.scl_model(mixed, vad)         # # (B, 256, 501)
                 feature = feature.reshape(-1, 1, 64, 32)                # (B, 1, 64, 32)
         else:  
             feature, vad_frame=self._get_gcc(mixed, vad)        # (B, 6, 64, 501)
