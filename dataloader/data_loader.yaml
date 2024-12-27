@@ -18,13 +18,13 @@ train:
   degree_resolution: 1
 
   dataloader_dict:
-    # batch_size: 32 
-    batch_size: 16
+    batch_size: 32 
+    # batch_size: 16
     shuffle: True
     num_workers: 16
     drop_last: True
 
-  mic_type: miyungpa 
+  mic_type: tetra 
   mic_num: 4 
   max_n_mic: 4 
   max_spk: 1
@@ -33,7 +33,7 @@ train:
 
   SNR: [5, 30]      # coherent noise
   spk_SNR: [-5, 5]  # multi-speaker
-  white_noise_snr: [30, 70]
+  white_noise_snr: [-15, 0]
   normalize_factor: [0.004, 1.0]  # white noise
  
 
@@ -47,13 +47,13 @@ train:
 
     mic:
       rotation: True
-      mic_type: miyungpa
+      mic_type: tetra
       mic_height: [0.3, 1.2]
-      mic_from_wall: 1.2
+      mic_from_wall: 0.2
 
     ref_vec: 0
     room:
-      distance: [1, 10] # m
+      distance: [0.3, 2.5] # m
       azimuth: [0, 360, 1] # start, end, unit # degree
       elevation: [30, 100, 1]  
       
@@ -75,26 +75,26 @@ train:
 val:
   loader:
 
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/doa/
+    pkl_dir: /root/clssl/SSL_src/prepared/pkl/scl/
 
     num_spk: 1  # for real DataLoader
     ans_azi: 0                                        
     degree_resolution: 1                              
 
     dataloader_dict:        # essential for real DataLoader
-      # batch_size: 32 
-      batch_size: 1
+      batch_size: 32 
+      # batch_size: 1
       shuffle: False
       num_workers: 0 
       drop_last: True
 
-    mic_type: miyungpa 
+    mic_type: tetra 
     mic_num: 4 
     max_n_mic: 4            # in usage
 
   maker:
 
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/doa/
+    pkl_dir: 
     
     noise_dir: /root/clssl/MS-SNSD/
     metadata_dir: /root/clssl/SSL_src/metadata/
@@ -116,18 +116,18 @@ val:
       num_workers: 0
       drop_last: True
 
-    mic_type: miyungpa 
+    mic_type: tetra 
     mic_num: 4 
     max_n_mic: 4 
     max_spk: 1
     speech_least_chunk_size: 32000
     duration: 64000 # 4s
 
-    SNR: [5, 30]        # coherent noise
-    spk_SNR: [-5, 5]    # multi-speaker
-    white_noise_snr: [30, 70]
+    SNR: [5, 30]      # coherent noise
+    spk_SNR: [-5, 5]  # multi-speaker
+    white_noise_snr: [-15, 0]
     normalize_factor: [0.004, 1.0]  # white noise
- 
+  
 
     gpu_rir_characteristic: 
         
@@ -139,13 +139,13 @@ val:
 
       mic:
         rotation: True
-        mic_type: miyungpa
+        mic_type: tetra
         mic_height: [0.3, 1.2]
-        mic_from_wall: 1.2
+        mic_from_wall: 0.2
 
       ref_vec: 0
       room:
-        distance: [1, 10] # m
+        distance: [0.3, 2.5] # m
         azimuth: [0, 360, 1] # start, end, unit # degree
         elevation: [30, 100, 1]  
         
@@ -178,7 +178,7 @@ test:
       num_workers: 0
       drop_last: True
 
-    mic_type: miyungpa 
+    mic_type: tetra 
     mic_num: 4 
     max_n_mic: 4
 
@@ -212,7 +212,7 @@ test:
       num_workers: 0 
       drop_last: True
 
-    mic_type: miyungpa 
+    mic_type: tetra 
     mic_num: 4 
     max_n_mic: 4            # in usage
     
@@ -226,7 +226,7 @@ test:
 
       mic:
         rotation: True
-        mic_type: miyungpa
+        mic_type: tetra
         mic_height: [1.0, 1.0]
         mic_from_wall: 0.2
 

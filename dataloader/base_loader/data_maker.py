@@ -379,7 +379,8 @@ class speech_data_maker_for_scl(base_data_maker):
         print('speech_csv', self.args['speech_csv'])
         print('noise_csv', self.args['noise_csv'])
         
-        self.pkl_dir=self.args['pkl_dir']
+        # self.pkl_dir=self.args['pkl_dir']
+        self.pkl_dir = '/root/clssl/SSL_src/prepared/pkl/scl/'
         os.makedirs(self.pkl_dir, exist_ok=True)
         
     
@@ -422,7 +423,8 @@ class speech_data_maker_for_doa(base_data_maker):
         print('speech_csv', self.args['speech_csv'])
         print('noise_csv', self.args['noise_csv'])
         
-        self.pkl_dir=self.args['pkl_dir']
+        # self.pkl_dir=self.args['pkl_dir']
+        self.pkl_dir = '/root/clssl/SSL_src/prepared/pkl/doa/'
         os.makedirs(self.pkl_dir, exist_ok=True)
         
         

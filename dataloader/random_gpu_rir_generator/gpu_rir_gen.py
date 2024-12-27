@@ -14,7 +14,8 @@ class simulator_common():
         ellipsoid=self.ellip_mic_pos()
         linear=self.linear_mic_pos()
         miyungpa=self.miyungpa_mic_pos()
-        self.mic_pos_dict={'circle':circle, 'ellipsoid':ellipsoid, 'linear':linear, 'miyungpa':miyungpa}
+        tetra=self.tetrahedral_mic_pos()
+        self.mic_pos_dict={'circle':circle, 'ellipsoid':ellipsoid, 'linear':linear, 'miyungpa':miyungpa, 'tetra':tetra}
 
 
         mic_list=[]
@@ -23,6 +24,7 @@ class simulator_common():
                 mic_list.append(self.mic_pos_dict[shape][num])
         mic_list.append(self.mic_pos_dict['linear'][8])
         mic_list.append(self.mic_pos_dict['miyungpa'][4])
+        mic_list.append(self.mic_pos_dict['tetra'][4])
 
         self.whole_mic_setup={}
         self.whole_mic_setup['arrayType']='2D'
@@ -32,6 +34,26 @@ class simulator_common():
 
         self.whole_mic_setup['mic_orV']=None
         self.whole_mic_setup['mic_patter']='omni'
+      
+    def spherical_to_cartesian(self, azimuth, elevation, r):
+        azimuth = np.deg2rad(azimuth)
+        elevation = np.deg2rad(elevation)
+        
+        x = r * np.cos(elevation) * np.cos(azimuth)
+        y = r * np.cos(elevation) * np.sin(azimuth)
+        z = r * np.sin(elevation)
+        
+        return x, y, z
+    
+    def tetrahedral_mic_pos(self):
+        m1 = self.spherical_to_cartesian(45, 35, 4.2)
+        m2 = self.spherical_to_cartesian(-45, -35, 4.2)
+        m3 = self.spherical_to_cartesian(135, -35, 4.2)
+        m4 = self.spherical_to_cartesian(-135, 35, 4.2)
+        
+        pos_4 = np.array([m1, m2, m3, m4])
+        
+        return {4:pos_4/100}
         
         
     def miyungpa_mic_pos(self):
@@ -39,7 +61,7 @@ class simulator_common():
                         [8.66, 0, -12.25],
                         [-4.33, 7.5, -12.25],
                         [-4.33, -7.5, -12.25]])     # spacing between mics: 15 cm
-        return {4:pos_4/100}                        # why /100 ?????
+        return {4:pos_4/100}                        
      
 
     def circle_mic_pos(self):
@@ -418,7 +440,11 @@ class acoustic_simulator_on_the_fly(simulator_common):
                 
         elif mic_type=='miyungpa':
             if mic_num==4:
-                target_mic_original_pos = whole_mic_original_pos[44:]
+                target_mic_original_pos = whole_mic_original_pos[44:48]
+                
+        elif mic_type=='tetra':
+            if mic_num==4:
+                target_mic_original_pos = whole_mic_original_pos[48:52]
         
         
         n_mic = target_mic_original_pos.shape[0]

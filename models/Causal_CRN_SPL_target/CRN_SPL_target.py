@@ -8,28 +8,6 @@ import librosa
 import torchaudio.transforms as T
 from .CL_CRN import main_model_for_scl
 import importlib
-    
-    
-class NonCausal_Conv2D_Block(nn.Module):
-    def __init__(self, *args, **kwargs):
-        super(NonCausal_Conv2D_Block, self).__init__()
-        
-        self.conv2d = nn.Conv2d(*args, **kwargs)
-
-        self.norm = nn.BatchNorm2d(args[1])     # args[1] : [3, 3]
-
-        self.activation = nn.ELU()
-
-    def forward(self, x):
-        original_frame_num = x.shape[-1]  # time 축 크기 저장
-        
-        x = self.conv2d(x)
-        x = self.norm(x)
-        x = self.activation(x)   
-        
-        x = x[..., :original_frame_num]  # 원래 time 축 크기로 자르기
-        
-        return x
 
 
 class Causal_Conv2D_Block(nn.Module):
@@ -44,19 +22,16 @@ class Causal_Conv2D_Block(nn.Module):
         
 
     def forward(self, x):
-        original_frame_num=x.shape[-1]      # 182
-        # print("11111", x.shape)             # (B, 6, 129, 182)   #      
+        original_frame_num=x.shape[-1]       
         
         x=self.conv2d(x)
-        # print("33333", x.shape)             # (B, 64, 129, 184)
-        
         x=self.norm(x)
         x=self.activation(x)   
         
         x=x[...,:original_frame_num] 
-        # print("44444", x.shape)             # (B, 64, 129, 182)
         
         return x
+
 
 class Conv1D_Block(nn.Module):
     def __init__(self, *args, **kwargs):
@@ -70,7 +45,7 @@ class Conv1D_Block(nn.Module):
 
 
     def forward(self, x):
-        # print("x.shape", x.shape)   # (B, 256, 690)
+
         x=self.conv1d(x)
         x=self.norm(x)
         x=self.activation(x)       
@@ -104,12 +79,12 @@ class crn(nn.Module):
 
         self.cnn=nn.ModuleList()
         self.pooling=nn.ModuleList()
-        self.cnn.append(NonCausal_Conv2D_Block(*args, **kwargs))       # (2*(C-1), 64, [3,3])
+        self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))       # (2*(C-1), 64, [3,3])
         self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
 
         args[0]=config['CNN']['filter']                             # (64, 64, [3,3])
         for count in range(self.cnn_num-1):
-            self.cnn.append(NonCausal_Conv2D_Block(*args, **kwargs))
+            self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))
             self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
     
         self.GRU_layer=nn.GRU(**config['GRU'])                            
@@ -144,8 +119,8 @@ class crn(nn.Module):
             x=pooling_layer(x)
  
         
-        b, c, f, t=x.shape                  # (B, 64, 4, 32) or (B, 64, 4, 501)
-        x=x.view(b, -1, t).permute(0,2,1)   # (B, 32, 256) or (B, 501, 256)
+        b, c, f, t=x.shape                  # (B, 64, 4, 32) or (B, 64, 16, 501)
+        x=x.view(b, -1, t).permute(0,2,1)   # (B, 32, 256) or (B, 501, 1024)
 
         h0 = self.h0.repeat_interleave(x.shape[0])  # h0 : (2*num_layers, B, hidden_size)
         h0 = h0.view(self.h0.shape[0], x.shape[0], self.h0.shape[-1])  # (3, B, 256)
@@ -323,30 +298,44 @@ class main_model_for_doa(nn.Module):
         return feature, vad_frame
     
     
-    def _get_gcc(self, mixed, vad):     # T x F x C
-        self.device = mixed.device
+    def _get_mel_spectrogram(self, linear_spectra):
         
-        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
+        self.nb_mel_bins = 64
+        self.n_fft =256
+        self.mel_wts = torch.tensor(librosa.filters.mel(sr=16000, n_fft=self.n_fft, n_mels=self.nb_mel_bins).T, device='cuda', dtype=torch.float32)
         
-        comp = torch.complex(r, i)  # B x C x F x T
-        # comp = comp[:, :, :33, :]
         
-        linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C
-        
-        self._nb_mel_bins = 64  
-        
-        gcc_feat = []
-        for m in range(linear_spectra.shape[-1]):
-            for n in range(m+1, linear_spectra.shape[-1]):
-                R = torch.conj(linear_spectra[:, :, :, m]) * linear_spectra[:, :, :, n]        
-                cc = torch.fft.irfft(torch.exp(1.j*torch.angle(R)), dim=-1)      # (B, T, 2*(F-1)) (B, 501, 64)
-                # cc.shape (B, 345, 64)
-                gcc_feat.append(cc)
-        
-        gcc_feat = torch.stack(gcc_feat, dim=-1)      # (B, 501, 64, 6)
-        gcc_feat = gcc_feat.permute(0, 3, 2, 1)         # (B, 6, 64, 501)
+        B, T, F, C = linear_spectra.shape
+        mel_feat = torch.zeros((B, T, self.nb_mel_bins, C), device='cuda')
 
-        return gcc_feat, vad_frame
+        for ch in range(C):
+            mag_spectra = torch.abs(linear_spectra[:, :, :, ch]) ** 2  # (B, T, F)
+            mel_spectra = torch.matmul(mag_spectra, self.mel_wts)  # (B, T, nb_mel_bins)
+            log_mel_spectra = torch.log10(torch.clamp(mel_spectra, min=1e-10)) * 10  # librosa power_to_db equivalent
+            mel_feat[:, :, :, ch] = log_mel_spectra     # (B, T, nb_mel_bins, C)
+
+        mel_feat = mel_feat.permute(0, 3, 2, 1)         # (B, C, nb_mel_bins, T)
+        return mel_feat     
+    
+    
+    def _get_gcc(self, linear_spectra):     # T x F x C       
+        
+        
+        B, T, F, C = linear_spectra.shape
+        gcc_channels = (C * (C - 1)) // 2
+        gcc_feat = torch.zeros((B, T, self.nb_mel_bins, gcc_channels), device='cuda')
+
+        cnt = 0
+        for m in range(C):
+            for n in range(m + 1, C):
+                R = torch.conj(linear_spectra[:, :, :, m]) * linear_spectra[:, :, :, n]  # (B, T, F)
+                cc = torch.fft.irfft(torch.exp(1j * torch.angle(R)), n=self.n_fft)  # (B, T, n_fft)
+                cc = torch.cat([cc[:, :, -self.nb_mel_bins // 2:], cc[:, :, :self.nb_mel_bins // 2]], dim=-1)  # Wrap GCC
+                gcc_feat[:, :, :, cnt] = cc         # (B, T, nb_mel_bins, 6)
+                cnt += 1
+
+        gcc_feat = gcc_feat.permute(0, 3, 2, 1)     # (B, 6, nb_mel_bins, T)
+        return gcc_feat     
 
 
     def vad_framing(self, vad_batch):
@@ -380,7 +369,14 @@ class main_model_for_doa(nn.Module):
                 _, feature, vad_frame = self.scl_model(mixed, vad)         # # (B, 256, 501)
                 feature = feature.reshape(-1, 1, 64, 32)                # (B, 1, 64, 32)
         else:  
-            feature, vad_frame=self._get_gcc(mixed, vad)        # (B, 6, 64, 501)
+            r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
+            comp = torch.complex(r, i)  # B x C x F x T
+            linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C
+            
+            mel_spect = self._get_mel_spectrogram(linear_spectra)
+            gcc = self._get_gcc(linear_spectra)
+            
+            feature = torch.cat((mel_spect, gcc), dim=1)       # (B, 10, 64, 501)
             
         
         out=self.crn(feature)   # (B, 3, 360, 512)

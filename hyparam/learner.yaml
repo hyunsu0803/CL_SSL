@@ -21,7 +21,7 @@ optimizer_scheduler:
     
 loss: 
   optimize_method: 'min'
-  type: BCEWithLogitsLoss
+  # type: BCEWithLogitsLoss
   # type: scl
 
   option:
