@@ -7,7 +7,7 @@ resolution: 1
 acc_threshold: 5
 local_maximum_distance: 30
 
-trained_scl_model_path : /root/clssl/results_scl_32*8/model_checkpoint/best_model.tar   # for scl
+trained_scl_model_path: /root/clssl/results_-15_scl_only/model_checkpoint/best_model.tar   # for scl
 
 model: '/root/clssl/results/model_checkpoint/best_model.tar'
 model_dir: '/root/clssl/results/model_checkpoint/'

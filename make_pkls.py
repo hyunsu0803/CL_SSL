@@ -50,7 +50,8 @@ class Dataloader_config():
         self.args=args
         
     def config(self):
-        self.val_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
+        # self.val_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
+        self.val_maker = Speech_datamake_for_scl(self.args['dataloader']['val']['maker'])
         # self.test_maker = Gunshot_datamake(self.args['dataloader']['test']['maker'])
       
         return self.args   
@@ -71,7 +72,9 @@ class Trainer():
     
     def run(self, ):
         
-        self.validation_for_scl(0)
+        for i in range(10):
+            self.validation_for_scl(0)
+        
         # self.validation_for_doa(0)
         # self.test(0)
         

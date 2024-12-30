@@ -71,11 +71,12 @@ class crn(nn.Module):
 
         args = [config['input_cnn_channel'],  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
        
-        # kwargs={'stride': 1, 'padding': [1,2], 'dilation': 1}
         kwargs = {'stride': 1, 'padding': (self.kernel_size[0] // 2, self.kernel_size[1] // 2), 'dilation': 1}
 
       
-
+        ##############################
+        # CNN layer
+        ##############################
 
         self.cnn=nn.ModuleList()
         self.pooling=nn.ModuleList()
@@ -87,12 +88,20 @@ class crn(nn.Module):
             self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))
             self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
     
+    
+    
+        ##############################
+        # GRU layer
+        ##############################
         self.GRU_layer=nn.GRU(**config['GRU'])                            
 
         self.h0 = torch.zeros(*config['GRU_init']['shape'])  # [3, 1, 256]
         self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
         
 
+        ##############################
+        # output layer
+        ##############################
         self.azi_mapping_conv_layer=nn.ModuleList()
         self.azi_mapping_final=nn.ModuleList()
 
@@ -114,11 +123,16 @@ class crn(nn.Module):
 
     def forward(self, x):
       
+        ##############################
+        # CNN layer
+        ##############################
         for cnn_layer, pooling_layer in zip(self.cnn, self.pooling):
             x=cnn_layer(x)[...,:x.shape[-1]]
             x=pooling_layer(x)
  
-        
+        ##############################
+        # GRU layer
+        ##############################
         b, c, f, t=x.shape                  # (B, 64, 4, 32) or (B, 64, 16, 501)
         x=x.view(b, -1, t).permute(0,2,1)   # (B, 32, 256) or (B, 501, 1024)
 
@@ -130,7 +144,9 @@ class crn(nn.Module):
            
         x = x.permute(0, 2, 1)                  # (B, 512, 32) or (B, 512, 501)
         
-        
+        ##############################
+        # output layer
+        ##############################
         outputs=[]
 
         for final_layer, cnn_layer in zip(self.azi_mapping_final, self.azi_mapping_conv_layer):
@@ -178,8 +194,8 @@ class main_model_for_doa(nn.Module):
         self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
         
         if self.use_scl:
-            self.model_select_for_scl_feature()     # self.scl_model
             self.trained_scl_model_path = self.hyparam['trained_scl_model_path']
+            self.model_select_for_scl_feature()     # self.scl_model
        
     
 
@@ -366,8 +382,8 @@ class main_model_for_doa(nn.Module):
 
         if self.use_scl:
             with torch.no_grad():
-                _, feature, vad_frame = self.scl_model(mixed, vad)         # # (B, 256, 501)
-                feature = feature.reshape(-1, 1, 64, 32)                # (B, 1, 64, 32)
+                _, feature, vad_frame = self.scl_model(mixed, vad)         # (B, 256, 501)
+                feature = feature.unsqueeze(dim=1)                # (B, 1, 256, 501)
         else:  
             r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
             comp = torch.complex(r, i)  # B x C x F x T
@@ -379,7 +395,7 @@ class main_model_for_doa(nn.Module):
             feature = torch.cat((mel_spect, gcc), dim=1)       # (B, 10, 64, 501)
             
         
-        out=self.crn(feature)   # (B, 3, 360, 512)
+        out=self.crn(feature)   # (B, 3, 360, 501)
         
         if LOCATA:
             target=self.stft_model.azimuth_strided(vad_frame, azi).unsqueeze(0)

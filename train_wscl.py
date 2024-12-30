@@ -174,8 +174,8 @@ class Learner_config():
 
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
-        self.model_select()     # set self.model
-        # self.model_select_for_finetune()
+        # self.model_select()     # set self.model
+        self.model_select_for_finetune()
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()
@@ -346,7 +346,7 @@ class Trainer():
         vad = vad.reshape(-1, vad.shape[-2], vad.shape[-1])
         speech_azi = speech_azi.reshape(-1, speech_azi.shape[-1])
             
-        perm = torch.randperm(mixed.size(0))  # 무작위 인덱스 생성 (size : 256)
+        perm = torch.randperm(mixed.size(0)) # (size : 256)
         
         mixed = mixed.index_select(0, perm)  
         vad = vad.index_select(0, perm)  
@@ -359,6 +359,7 @@ class Trainer():
 
         self.model.train()
 
+        torch.cuda.empty_cache()
         
         with torch.cuda.amp.autocast():
             
@@ -369,7 +370,7 @@ class Trainer():
                 # vad : [64, 8, 1, 64000]
                 # speech_azi : [64, 8, 1]
                 mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
-                # mixed : [512, 4, 64000]   # 512 되어야 함
+                # mixed : [512, 4, 64000]   # 512 ?��?��?�� ?��
                 # vad : [512, 1, 64000]
                 # speech_azi : [512, 1]
                 
@@ -377,16 +378,16 @@ class Trainer():
                 vad=vad.to(self.hyperparameter.device)
                 speech_azi=speech_azi.to(self.hyperparameter.device)
                 
-                
+                assert mixed is not None, "mixed is None"
                 
                     
-                out, embedding = self.model(mixed, vad)
+                out, embedding, vad_frame = self.model(mixed, vad)
                 
                 loss = self.learner.train_update(out, speech_azi)
                     
 
                 self.logger.train_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame])
                 
                 self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         
@@ -415,13 +416,13 @@ class Trainer():
 
                     
                     
-                    out = self.model(mixed, vad)
+                    out, embedding, vad_frame = self.model(mixed, vad)
                     
                     loss=self.learner.test_update(out, speech_azi)
                         
                         
                     self.logger.test_iter_log(loss)
-                    self.learner.memory_delete([mixed, vad, speech_azi, out, loss])
+                    self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame])
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
             

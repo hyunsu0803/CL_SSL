@@ -32,7 +32,7 @@ FFT:
   vad_threshold: 0.6666
 
 
-SCL: False
+SCL: True
 
 CRN:
 
@@ -50,7 +50,8 @@ CRN:
       stride: [2,1]
   
   GRU:
-    input_size: 256
+    # input_size: 256
+    input_size: 1024
     hidden_size: 256
     num_layers: 3
     batch_first: True

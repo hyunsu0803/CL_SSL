@@ -21,7 +21,7 @@ train:
     batch_size: 32 
     # batch_size: 16
     shuffle: True
-    num_workers: 16
+    num_workers: 4
     drop_last: True
 
   mic_type: tetra 
@@ -75,7 +75,7 @@ train:
 val:
   loader:
 
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/scl/
+    pkl_dir: /root/clssl/SSL_src/prepared/pkl/doa/
 
     num_spk: 1  # for real DataLoader
     ans_azi: 0                                        

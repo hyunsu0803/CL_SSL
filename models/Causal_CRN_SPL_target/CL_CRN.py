@@ -15,8 +15,7 @@ class Causal_Conv2D_Block(nn.Module):
         
         self.conv2d=nn.Conv2d(*args, **kwargs)
 
-        self.norm=nn.BatchNorm2d(args[1], eps=1e-5)
-        # self.norm=nn.LayerNorm(args[1])
+        self.norm=nn.BatchNorm2d(args[1])
 
         self.activation=nn.ELU()
         
@@ -25,7 +24,6 @@ class Causal_Conv2D_Block(nn.Module):
         original_frame_num=x.shape[-1]           
         
         x=self.conv2d(x)
-        
         x=self.norm(x)
         x=self.activation(x)   
         
@@ -40,7 +38,6 @@ class Conv1D_Block(nn.Module):
         self.conv1d=nn.Conv1d(*args, **kwargs)
         
         self.norm=nn.BatchNorm1d(args[1])
-        # self.norm=nn.LayerNorm(args[1])
         
         self.activation=nn.ELU()
 
@@ -70,7 +67,7 @@ class crn(nn.Module):
         self.max_pool_kernel=config['CNN']['max_pool']['kernel_size']   # [2,1]
         self.max_pool_stride=config['CNN']['max_pool']['stride']        # [2,1]
 
-        args = [2*(config['input_audio_channel']-1),  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
+        args = [config['input_cnn_channel'],  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
        
         kwargs = {'stride': 1, 'padding': (self.kernel_size[0] // 2, self.kernel_size[1] // 2), 'dilation': 1}
 
@@ -94,13 +91,8 @@ class crn(nn.Module):
         ##############################
         # GRU layer
         ##############################
-        # self.h0=torch.zeros(*config['GRU_init']['shape'])
         self.GRU_layer=nn.GRU(**config['GRU'])                      # bidirectional=True      
         
-        num_layers = config['GRU_init']['shape'][0]  # 3
-        hidden_size = config['GRU_init']['shape'][-1]  # 256
-
-        # self.h0 = torch.zeros(num_layers * 2, 1, hidden_size)  # [6, 1, 256]
         self.h0 = torch.zeros(*config['GRU_init']['shape'])  # 
         self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
         
@@ -326,6 +318,8 @@ class main_model_for_scl(nn.Module):
         gcc_feat = gcc_feat.permute(0, 3, 2, 1)         # (B, 6, 256, 501)
 
         return gcc_feat, vad_frame
+    
+    
 
 
     # def vad_framing(self, vad_batch):
@@ -353,11 +347,9 @@ class main_model_for_scl(nn.Module):
 
         
     def forward(self, mixed, vad):
-        ###### irtf feature extraction  (B, 6, 129, 501)
-        # feature, vad_frame=self.irtf_feature(mixed, vad) 
         
-        ###### gcc feature extraction  (B, 6, 256, 501)
-        feature, vad_frame=self._get_gcc(mixed, vad)   
+        feature, vad_frame=self._get_gcc(mixed, vad)
+        
         
         # model forward
         out, embedding = self.crn(feature)   # (B, 2048)
