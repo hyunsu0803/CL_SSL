@@ -61,100 +61,53 @@ class crn(nn.Module):
 
         
         self.cnn_num=config['CNN']['layer_num']
-        self.kernel_size=config['CNN']['kernel_size']
-        self.filter_size=config['CNN']['filter']            # 64
+        self.kernel_size=config['CNN']['kernel_size']       # 3
+        self.filter_size=config['CNN']['filter']            # 32
 
-        self.max_pool_kernel=config['CNN']['max_pool']['kernel_size']   # [2,1]
-        self.max_pool_stride=config['CNN']['max_pool']['stride']        # [2,1]
-
+        self.max_pool_kernel=config['CNN']['max_pool']['kernel_size']
+        self.max_pool_stride=config['CNN']['max_pool']['stride']
+        
         args = [config['input_cnn_channel'],  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
        
-        kwargs = {'stride': 1, 'padding': (self.kernel_size[0] // 2, self.kernel_size[1] // 2), 'dilation': 1}
+        kwargs = {'stride': 1, 'padding': self.kernel_size // 2, 'dilation': 1}
 
-      
 
         ##############################
         # CNN layer
         ##############################
         self.cnn=nn.ModuleList()
         self.pooling=nn.ModuleList()
-        self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))       # (2*(C-1), 64, [3,3])
-        self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
-
-        args[0]=config['CNN']['filter']                             # (64, 64, [3,3])   in_channel 변경
+        self.cnn.append(Conv1D_Block(*args, **kwargs))       # (2*2*(C-1), 32, 3)
+        self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
+        
+        args[0]=config['CNN']['filter']                             # (64, 32, 3)   in_channel 변경
         for count in range(self.cnn_num-1):
-            self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))
-            self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
+            self.cnn.append(Conv1D_Block(*args, **kwargs))   
+            self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
     
-    
-    
-        ##############################
-        # GRU layer
-        ##############################
-        self.GRU_layer=nn.GRU(**config['GRU'])                      # bidirectional=True      
-        
-        self.h0 = torch.zeros(*config['GRU_init']['shape'])  # 
-        self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
-        
-
-
         ##############################
         # projection layer
         ##############################
-        self.time_comp_layer=nn.ModuleList()
-        kwargs['padding']=1
-        args = [501, 128, 3]  # in_channels, out_channels, kernel_size
-        self.time_comp_layer.append(Conv1D_Block(*args, **kwargs))
-        args = [128, 32, 3]
-        self.time_comp_layer.append(Conv1D_Block(*args, **kwargs))
+        self.projection = nn.Linear(config['embedding_size'], config['projection_size'])  # (256, 128)
         
-
-        self.channel_comp_layer=nn.ModuleList()
-        args = [256, 128, 3]    
-        self.channel_comp_layer.append(Conv1D_Block(*args, **kwargs))
-        args = [128, 64, 3]     
-        self.channel_comp_layer.append(Conv1D_Block(*args, **kwargs))
-        
-    
-     
 
     def forward(self, x):
         
         ##############################
         # CNN layer
         ##############################
-        # x: (B, 6, 256, 501)
+        # x: (B, 6, 129)
         for cnn_layer, pooling_layer in zip(self.cnn, self.pooling):
-            x=cnn_layer(x)[...,:x.shape[-1]]    # (B, 64, 64, 501)  (B, 64, 32, 501)    (B, 64, 6, 501)
-            x=pooling_layer(x)                  # (B, 64, 32, 501)  (B, 64, 16, 501)    (B, 64, 3, 501)
-
+            x=cnn_layer(x)
+            x=pooling_layer(x)
+        # x: (B, 32, 8)
+        x_flatten = x.view(x.size(0), -1)  # (B, 256)
+        embedding = F.normalize(x_flatten, dim=1)
         
         ##############################
-        # GRU layer
+        # projection layer
         ##############################
-        b, c, f, t = x.shape                  # (B, 64, 16, 501)
-        x = x.view(b, -1, t).permute(0,2,1)   # (B, 501, 1024)
-
-        h0 = self.h0.repeat_interleave(x.shape[0])  # h0 : (2*gru_num_layers, B, hidden_size) (3, B, 256)
-        h0 = h0.view(self.h0.shape[0], x.shape[0], self.h0.shape[-1])  # (3, B, 256)
-        self.GRU_layer.flatten_parameters()
-        
-        x, h=self.GRU_layer(x, h0)      # (B, 501, 256(hidden size))
-        embedding = F.normalize(x.permute(0,2,1), dim=1)    # (B, 256, 501)
-
-        
-        ##############################
-        # output layer
-        ##############################
-        for cnn_layer in self.time_comp_layer:
-            x = cnn_layer(x)  # Reduce along the time axis (B, 128, 256), (B, 32, 256)
-        x = x.permute(0, 2, 1)  # (B, 32, 256) -> (B, 256, 32)
-        for cnn_layer in self.channel_comp_layer:
-            x = cnn_layer(x) # Reduce along the channel axis (B, 128, 32), (B, 64, 32)
-
-
-
-        x = x.view(x.size(0), -1)  # (B, 2048)
+        x = self.projection(embedding)  # (B, 128)
         x = F.normalize(x, dim=1)
         
         return x, embedding
@@ -320,6 +273,38 @@ class main_model_for_scl(nn.Module):
         return gcc_feat, vad_frame
     
     
+    def compressed_RTF(self, mixed, vad):
+        
+        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)     # vad_frame : (B, 1, 501)
+        stft = torch.complex(r, i)  # B x C x F x T
+        
+        num_select_time = 31
+        
+        time_indices = [torch.nonzero(vad_frame[b, 0] == 1, as_tuple=True)[0] for b in range(vad_frame.shape[0])]
+        selected_indices = [
+            idx[torch.randperm(len(idx))[:num_select_time]] if len(idx) > num_select_time else idx if len(idx) > 0 else torch.tensor([0])
+            for idx in time_indices
+        ]
+        batch_indices = torch.arange(stft.size(0))[:, None]                 # (1024, 1)
+        time_indices = torch.stack([ idx for idx in selected_indices ])     # (1024, num_select_time)
+        complex_selected = stft[batch_indices, :, :, time_indices]          # (B, num_select_time, C, F)
+        
+        linear_spectra = complex_selected.permute(0, 3, 1, 2)               # (B, F, num_select_time, C)
+        
+        cov_z = torch.einsum('bftc,bftd->bfcd', linear_spectra, linear_spectra.conj()) / num_select_time    # (B, F, C, C)
+
+        col0 = cov_z[:, :, :, self.ref_ch]                                # (B, F, C)        
+        col00 = col0[:, :, self.ref_ch]                                   # (B, F)
+        
+        col0 = torch.cat((col0[:,:,self.ref_ch-1:self.ref_ch], col0[:,:,self.ref_ch+1:]), dim=-1)    # (B, F, C-1)
+        col00 = torch.complex(col00.real.clamp(self.eps), col00.imag.clamp(self.eps))
+        
+        c_rtf = col0 / col00[:, :, None]    # (B, F, C-1)
+        c_rtf = torch.cat((c_rtf.real, c_rtf.imag), dim=-1)    # (B, F, 2(C-1))
+
+        c_rtf = c_rtf.permute(0, 2, 1)    # (B, 2(C-1), F)
+
+        return c_rtf, vad_frame
 
 
     # def vad_framing(self, vad_batch):
@@ -348,11 +333,12 @@ class main_model_for_scl(nn.Module):
         
     def forward(self, mixed, vad):
         
-        feature, vad_frame=self._get_gcc(mixed, vad)
+        feature, vad_frame = self.compressed_RTF(mixed, vad)    # (B, 2(C-1), F), (B, 1, T)
+        # feature, vad_frame=self._get_gcc(mixed, vad)
         
         
         # model forward
-        out, embedding = self.crn(feature)   # (B, 2048)
+        out, embedding = self.crn(feature)   # (B, 128), (B, 512)
         
         
         return out, embedding, vad_frame

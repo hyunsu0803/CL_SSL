@@ -174,8 +174,8 @@ class Learner_config():
 
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
-        # self.model_select()     # set self.model
-        self.model_select_for_finetune()
+        self.model_select()     # set self.model
+        # self.model_select_for_finetune()
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()
@@ -361,35 +361,33 @@ class Trainer():
 
         torch.cuda.empty_cache()
         
-        with torch.cuda.amp.autocast():
+        # with torch.cuda.amp.autocast():
             
-            self.n_room = 2
-            self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
-            for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
-                # mixed : [64, 8, 4, 64000]
-                # vad : [64, 8, 1, 64000]
-                # speech_azi : [64, 8, 1]
-                mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
-                # mixed : [512, 4, 64000]   # 512 ?��?��?�� ?��
-                # vad : [512, 1, 64000]
-                # speech_azi : [512, 1]
+        self.n_room = 8
+        self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
+        for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+            # mixed : [64, 8, 4, 64000]
+            # vad : [64, 8, 1, 64000]
+            # speech_azi : [64, 8, 1]
+            mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
+            # mixed : [512, 4, 64000]   
+            # vad : [512, 1, 64000]
+            # speech_azi : [512, 1]
+            
+            mixed=mixed.to(self.hyperparameter.device)
+            vad=vad.to(self.hyperparameter.device)
+            speech_azi=speech_azi.to(self.hyperparameter.device)
+            
                 
-                mixed=mixed.to(self.hyperparameter.device)
-                vad=vad.to(self.hyperparameter.device)
-                speech_azi=speech_azi.to(self.hyperparameter.device)
+            out, embedding, vad_frame = self.model(mixed, vad)
+            
+            loss = self.learner.train_update(out, speech_azi)
                 
-                assert mixed is not None, "mixed is None"
-                
-                    
-                out, embedding, vad_frame = self.model(mixed, vad)
-                
-                loss = self.learner.train_update(out, speech_azi)
-                    
 
-                self.logger.train_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame])
-                
-                self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
+            self.logger.train_iter_log(loss)
+            self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame])
+            
+            self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         
         
         self.logger.train_epoch_log()
@@ -400,29 +398,29 @@ class Trainer():
         
         torch.cuda.empty_cache()
         
-        with torch.cuda.amp.autocast():
-            with torch.no_grad():
+        # with torch.cuda.amp.autocast():
+        with torch.no_grad():
+            
+            # mixed : (16, 4, 64000)
+            # speech_azi : (16, 1)
+            # num_spk : (16)
+            for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
                 
-                # mixed : (16, 4, 64000)
-                # speech_azi : (16, 1)
-                # num_spk : (16)
-                for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
-                    
-                    mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
-                    
-                    mixed=mixed.to(self.hyperparameter.device)
-                    vad=vad.to(self.hyperparameter.device)
-                    speech_azi=speech_azi.to(self.hyperparameter.device)
+                mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
+                
+                mixed=mixed.to(self.hyperparameter.device)
+                vad=vad.to(self.hyperparameter.device)
+                speech_azi=speech_azi.to(self.hyperparameter.device)
 
+                
+                
+                out, embedding, vad_frame = self.model(mixed, vad)
+                
+                loss=self.learner.test_update(out, speech_azi)
                     
                     
-                    out, embedding, vad_frame = self.model(mixed, vad)
-                    
-                    loss=self.learner.test_update(out, speech_azi)
-                        
-                        
-                    self.logger.test_iter_log(loss)
-                    self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame])
+                self.logger.test_iter_log(loss)
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame])
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
             

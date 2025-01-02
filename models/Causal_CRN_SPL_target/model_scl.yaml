@@ -36,21 +36,27 @@ FFT:
 CRN:
 
   input_cnn_channel: 6
-  input_audio_channel: 4
+  embedding_size: 256
+  projection_size: 128
+
   fft_freq_bin_num: 129
-  # fft_freq_bin_num: 513
+
 
   CNN:
     layer_num: 4
-    kernel_size: [3,3] # F X T
-    filter: 64
+    # kernel_size: [3,3] # F X T
+    kernel_size: 3
+    # filter: 64
+    filter: 32
 
     max_pool:
-      kernel_size: [2,1]
-      stride: [2,1]
+      # kernel_size: [2,1]
+      # stride: [2,1]
+      kernel_size: 2
+      stride: 2
   
   GRU:
-    input_size: 1024
+    input_size: 512
 
     hidden_size: 256
     num_layers: 3

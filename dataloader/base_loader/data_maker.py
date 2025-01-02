@@ -211,7 +211,24 @@ class base_data_maker(datamake):
     
     def random_room_speech_select(self, n_room):
         
-        speech_info=self.speech_csv.sample(n=n_room)   
+        while True:
+            speech_info = self.speech_csv.sample(n=n_room)
+            
+            all_valid = True  
+            
+            for _, row in speech_info.iterrows():
+                ftype = '.' + row['audio_path'].split('.')[-1]
+                vad_name = self.vad_dir + row['audio_path'].replace(ftype, '.npy')
+
+                vad = np.load(vad_name)
+                if np.count_nonzero(vad) <= 128 * 60:
+                    all_valid = False  
+                    break
+
+            if all_valid:
+                break  
+            
+            
         self.rooms = []
         for n in range(n_room):
             room_sz, rt60, abs_weight = self.rir_maker.random_room_select()

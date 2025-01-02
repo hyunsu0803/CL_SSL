@@ -2,7 +2,7 @@ torch_start_method: 'forkserver'
 randomseed: 0
 
 
-last_epoch: 200
+last_epoch: 500
 resume_epoch: 0
 
 GPGPU:
