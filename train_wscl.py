@@ -120,24 +120,15 @@ class Learner_config():
 
     def train_update(self, output, labels):
          
-        # output=torch.sigmoid(output)
         with torch.cuda.amp.autocast():
             loss_mean = self.loss_func(output, labels)
 
-        # for j in range(len(self.loss_weight)):
-        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
-
-        # loss_mean=loss.mean()
 
         if torch.isnan(loss_mean):
             print('nan occured')
             self.optimizer.zero_grad()
             return loss_mean
 
-        # loss_mean.backward()
-        # torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
-        # self.optimizer.step()
-        # self.optimizer.zero_grad()
         
         self.scaler.scale(loss_mean).backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
@@ -150,15 +141,6 @@ class Learner_config():
 
 
     def test_update(self, output, labels):
-       
-        # target=target[:, self.loss_train_map_num]       # :, [0, 1, 2]
-        # output=output[:, self.loss_train_map_num].sigmoid()
-
-        # loss=self.loss_func(output, target)
-
-        # for j in range(len(self.loss_weight)):
-        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
-        # loss_mean=loss.mean()
         
         with torch.cuda.amp.autocast():
             loss_mean = self.loss_func(output, labels)
@@ -174,8 +156,8 @@ class Learner_config():
 
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
-        self.model_select()     # set self.model
-        # self.model_select_for_finetune()
+        # self.model_select()     # set self.model
+        self.model_select_for_finetune()
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()

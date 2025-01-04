@@ -63,66 +63,53 @@ class crn(nn.Module):
 
         
         self.cnn_num=config['CNN']['layer_num']
-        self.kernel_size=config['CNN']['kernel_size']
-        self.filter_size=config['CNN']['filter']        
+        self.kernel_size=config['CNN']['kernel_size']       # 3
+        self.filter_size=config['CNN']['filter']            # 32
 
         self.max_pool_kernel=config['CNN']['max_pool']['kernel_size']
         self.max_pool_stride=config['CNN']['max_pool']['stride']
-
+        
         args = [config['input_cnn_channel'],  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
        
-        kwargs = {'stride': 1, 'padding': (self.kernel_size[0] // 2, self.kernel_size[1] // 2), 'dilation': 1}
+        kwargs = {'stride': 1, 'padding': self.kernel_size // 2, 'dilation': 1}
 
-      
+
         ##############################
         # CNN layer
         ##############################
-
         self.cnn=nn.ModuleList()
         self.pooling=nn.ModuleList()
-        self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))       # (2*(C-1), 64, [3,3])
-        self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
-
-        args[0]=config['CNN']['filter']                             # (64, 64, [3,3])
-        for count in range(self.cnn_num-1):
-            self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))
-            self.pooling.append(nn.MaxPool2d(self.max_pool_kernel, stride=self.max_pool_stride))
-    
-    
-    
-        ##############################
-        # GRU layer
-        ##############################
-        self.GRU_layer=nn.GRU(**config['GRU'])                            
-
-        self.h0 = torch.zeros(*config['GRU_init']['shape'])  # [3, 1, 256]
-        self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
+        self.cnn.append(Conv1D_Block(*args, **kwargs))       # (2*2*(C-1), 32, 3)
+        self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
         
+        args[0]=config['CNN']['filter']                             # (64, 32, 3)   in_channel 변경
+        for count in range(self.cnn_num-1):
+            self.cnn.append(Conv1D_Block(*args, **kwargs))   
+            self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
+    
 
         ##############################
         # output layer
         ##############################
         self.azi_mapping_conv_layer=nn.ModuleList()
         self.azi_mapping_final=nn.ModuleList()
-
-
-        args[0]=config['GRU']['hidden_size']
-        args[1]=config['GRU']['hidden_size']
-        args[2]=1
+        
+        args = [1024, 512, 1]
         kwargs['padding']=0
         
-        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-        self.azi_mapping_final.append(nn.Conv1d(config['GRU']['hidden_size'], self.azi_size, 1))
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (1024, 512, 1)
+        args[0]=512
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (512, 512, 1)
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (512, 512, 1)
         
-        args[0]=config['GRU']['hidden_size']
-        for _ in range(output_num -1):
-            self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))
-            self.azi_mapping_final.append(nn.Conv1d(config['GRU']['hidden_size'], self.azi_size, 1))
-
+        args[1] = 360
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       # (512, 360, 1)
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       # (512, 360, 1)
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       # (512, 360, 1)
 
 
     def forward(self, x):
-      
+        # x : (B, 1, 256)
         ##############################
         # CNN layer
         ##############################
@@ -130,32 +117,22 @@ class crn(nn.Module):
             x=cnn_layer(x)[...,:x.shape[-1]]
             x=pooling_layer(x)
  
-        ##############################
-        # GRU layer
-        ##############################
-        b, c, f, t=x.shape                  # (B, 64, 4, 32) or (B, 64, 16, 501)
-        x=x.view(b, -1, t).permute(0,2,1)   # (B, 32, 256) or (B, 501, 1024)
-
-        h0 = self.h0.repeat_interleave(x.shape[0])  # h0 : (2*num_layers, B, hidden_size)
-        h0 = h0.view(self.h0.shape[0], x.shape[0], self.h0.shape[-1])  # (3, B, 256)
-        self.GRU_layer.flatten_parameters()
+        # x : (B, 64, 16)
+        x = x.reshape(x.shape[0], -1, 1)   # (B, 1024, 1)
         
-        x, h=self.GRU_layer(x, h0)      # (B, 32?, 512) or (B, 501, 512)
-           
-        x = x.permute(0, 2, 1)                  # (B, 512, 32) or (B, 512, 501)
         
         ##############################
         # output layer
         ##############################
         outputs=[]
 
-        for final_layer, cnn_layer in zip(self.azi_mapping_final, self.azi_mapping_conv_layer):
+        for cnn_layer, final_layer in zip(self.azi_mapping_conv_layer, self.azi_mapping_final):
             x=cnn_layer(x)
             res_output=final_layer(x)
             outputs.append(res_output)
-        output=torch.stack(outputs).permute(1,0,2,3)    # (B, 3, ...)
+        output=torch.stack(outputs).permute(1,0,2,3)    # (B, 3, 360, 1)
         
-        return output
+        return output.squeeze(dim=-1)
 
 
 
@@ -382,8 +359,8 @@ class main_model_for_doa(nn.Module):
 
         if self.use_scl:
             with torch.no_grad():
-                _, feature, vad_frame = self.scl_model(mixed, vad)         # (B, 256, 501)
-                feature = feature.unsqueeze(dim=1)                # (B, 1, 256, 501)
+                _, feature, vad_frame = self.scl_model(mixed, vad)         # (B, 256)
+                feature = feature.unsqueeze(dim=1)                # (B, 1, 256)
         else:  
             r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
             comp = torch.complex(r, i)  # B x C x F x T
@@ -395,7 +372,7 @@ class main_model_for_doa(nn.Module):
             feature = torch.cat((mel_spect, gcc), dim=1)       # (B, 10, 64, 501)
             
         
-        out=self.crn(feature)   # (B, 3, 360, 501)
+        out=self.crn(feature)   # (B, 3, 360)
         
         if LOCATA:
             target=self.stft_model.azimuth_strided(vad_frame, azi).unsqueeze(0)
@@ -408,10 +385,8 @@ class main_model_for_doa(nn.Module):
             
         else:
             target=self.make_target( vad_frame, azi, iter_num, epoch)
-            # target, _ = torch.max(target, dim=3)   # (B, 3, 360)
+            target, _ = torch.max(target, dim=3)   # (B, 3, 360)
         
-        # if mic_type=='linear':
-        #     target=self.target_flip(target)
         
         return out, target
 

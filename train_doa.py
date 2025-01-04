@@ -132,6 +132,11 @@ class Learner_config():
             loss[:, j]=loss[:,j]*self.loss_weight[j]
 
         loss_mean=loss.mean()
+        
+        if torch.isnan(loss).any():
+            print('NaN occurred in loss')
+            self.optimizer.zero_grad()
+            return loss_mean
 
         if torch.isnan(loss_mean):
             print('nan occured')
@@ -335,12 +340,9 @@ class Trainer():
     
 
     def train(self, epoch):
-
+        import pdb
         self.model.train()
-        # self.optimizer.zero_grad()
 
-        # mic_type=self.args['dataloader']['train']['mic_type']
-        
         
         for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
             
@@ -366,7 +368,6 @@ class Trainer():
     def validation(self, epoch):
         self.model.eval()
         
-        # mic_type=self.args['dataloader']['val']['loader']['mic_type']
         
         with torch.no_grad():
             

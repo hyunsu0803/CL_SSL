@@ -280,18 +280,13 @@ class main_model_for_scl(nn.Module):
         
         num_select_time = 31
         
-        time_indices = [torch.nonzero(vad_frame[b, 0] == 1, as_tuple=True)[0] for b in range(vad_frame.shape[0])]
-        selected_indices = [
-            idx[torch.randperm(len(idx))[:num_select_time]] if len(idx) > num_select_time else idx if len(idx) > 0 else torch.tensor([0])
-            for idx in time_indices
-        ]
-        batch_indices = torch.arange(stft.size(0))[:, None]                 # (1024, 1)
-        time_indices = torch.stack([ idx for idx in selected_indices ])     # (1024, num_select_time)
-        complex_selected = stft[batch_indices, :, :, time_indices]          # (B, num_select_time, C, F)
+        time_indices = [len(torch.nonzero(vad_frame[b, 0] == 1, as_tuple=True)[0]) for b in range(vad_frame.shape[0])]
+        time_indices = [ idx if idx > 0 else 1 for idx in time_indices ]
+        time_len = torch.tensor(time_indices, device=stft.device)
+    
+        linear_spectra = stft.permute(0, 2, 3, 1)    # (B, F, T, C)
         
-        linear_spectra = complex_selected.permute(0, 3, 1, 2)               # (B, F, num_select_time, C)
-        
-        cov_z = torch.einsum('bftc,bftd->bfcd', linear_spectra, linear_spectra.conj()) / num_select_time    # (B, F, C, C)
+        cov_z = torch.einsum('bftc,bftd->bfcd', linear_spectra, linear_spectra.conj()) / time_len[:, None, None, None]    # (B, F, C, C)
 
         col0 = cov_z[:, :, :, self.ref_ch]                                # (B, F, C)        
         col00 = col0[:, :, self.ref_ch]                                   # (B, F)
@@ -338,7 +333,7 @@ class main_model_for_scl(nn.Module):
         
         
         # model forward
-        out, embedding = self.crn(feature)   # (B, 128), (B, 512)
+        out, embedding = self.crn(feature)   # (B, 128), (B, 256)
         
         
         return out, embedding, vad_frame

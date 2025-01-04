@@ -42,12 +42,15 @@ CRN:
 
   CNN:
     layer_num: 4
-    kernel_size: [3,3] # F X T
+    # kernel_size: [3,3] # F X T
+    kernel_size: 3
     filter: 64
 
     max_pool:
-      kernel_size: [2,1]
-      stride: [2,1]
+      # kernel_size: [2,1]
+      # stride: [2,1]
+      kernel_size: 2
+      stride: 2
   
   GRU:
     # input_size: 256

@@ -2,11 +2,11 @@ torch_start_method: 'forkserver'
 randomseed: 0
 
 
-last_epoch: 500
+last_epoch: 150
 resume_epoch: 0
 
 GPGPU:
   device_ids: [0]
 
-model: /root/clssl/experiment_2/results_32*2_scl_only/model_checkpoint/best_model.tar  # only for fine-tuning
-trained_scl_model_path: /root/clssl/results_-15_scl_only/model_checkpoint/15_model.tar   # for scl
+model: /root/clssl/results_-10+10_scl_300epochs/model_checkpoint/best_model.tar  # only for fine-tuning
+trained_scl_model_path: /root/clssl/results_-10+10_scl_add200epochs/model_checkpoint/best_model.tar   # for scl

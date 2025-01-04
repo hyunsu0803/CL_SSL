@@ -211,7 +211,7 @@ class Tester():
                     mixed=mixed.cpu().numpy()                   # (B, 4, 64000)
 
 
-                    output_azi = out[0,2].mean(axis=1).argmax()
+                    output_azi = out[0,2].argmax()
                     ans_azi = speech_azi[0,0]
                     
                     error = abs(output_azi - ans_azi)
