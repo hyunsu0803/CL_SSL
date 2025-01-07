@@ -75,7 +75,7 @@ class Learner_config():
             self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
             
         else:
-            self.args['model']['CRN']['input_cnn_channel'] = 10
+            self.args['model']['CRN']['input_cnn_channel'] = 6
             self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
             
         trained=torch.load(self.args['hyparam']['model'], map_location=self.device)     # only for infer
@@ -117,7 +117,7 @@ class Logger_config():
         total_error_sum = self.save_config_dict['total_error_sum']
         number_of_degrees = self.save_config_dict['number_of_degrees']
         MAE = total_error_sum/number_of_degrees
-        print(f"음성 방향 추정 MAE : {MAE:.2f}\n")
+        print(f"MAE : {MAE:.2f}\n")
         os.makedirs(self.result_folder['inference_folder']+ self.room_type[0], exist_ok=True)
         with open(self.result_folder['inference_folder']+ self.room_type[0]+f'/{epoch}_result_{MAE:.1f}.txt', 'w') as f:
 

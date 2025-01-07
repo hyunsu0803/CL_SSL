@@ -9,4 +9,4 @@ GPGPU:
   device_ids: [0]
 
 model: /root/clssl/results_-10+10_scl_300epochs/model_checkpoint/best_model.tar  # only for fine-tuning
-trained_scl_model_path: /root/clssl/results_-10+10_scl_add200epochs/model_checkpoint/best_model.tar   # for scl
+trained_scl_model_path: /root/clssl/experiment_4/results_-10+10_scl_add200epochs/model_checkpoint/best_model.tar   # for scl

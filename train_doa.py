@@ -71,7 +71,7 @@ class Learner_config():
             self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
             
         else:
-            self.args['model']['CRN']['input_cnn_channel'] = 10
+            self.args['model']['CRN']['input_cnn_channel'] = 6
             self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
         self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])   
         

@@ -82,7 +82,7 @@ class crn(nn.Module):
         self.cnn.append(Conv1D_Block(*args, **kwargs))       # (2*2*(C-1), 32, 3)
         self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
         
-        args[0]=config['CNN']['filter']                             # (64, 32, 3)   in_channel 변경
+        args[0]=config['CNN']['filter']                             # (64, 32, 3)   
         for count in range(self.cnn_num-1):
             self.cnn.append(Conv1D_Block(*args, **kwargs))   
             self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
@@ -94,7 +94,8 @@ class crn(nn.Module):
         self.azi_mapping_conv_layer=nn.ModuleList()
         self.azi_mapping_final=nn.ModuleList()
         
-        args = [1024, 512, 1]
+        # args = [1024, 512, 1]
+        args = [512, 512, 1]
         kwargs['padding']=0
         
         self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (1024, 512, 1)
@@ -329,6 +330,32 @@ class main_model_for_doa(nn.Module):
 
         gcc_feat = gcc_feat.permute(0, 3, 2, 1)     # (B, 6, nb_mel_bins, T)
         return gcc_feat     
+    
+    def compressed_RTF(self, mixed, vad):
+        
+        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)     # vad_frame : (B, 1, 501)
+        stft = torch.complex(r, i)  # B x C x F x T
+        
+        time_indices = [len(torch.nonzero(vad_frame[b, 0] == 1, as_tuple=True)[0]) for b in range(vad_frame.shape[0])]
+        time_indices = [ idx if idx > 0 else 1 for idx in time_indices ]
+        time_len = torch.tensor(time_indices, device=stft.device)
+    
+        linear_spectra = stft.permute(0, 2, 3, 1)    # (B, F, T, C)
+        
+        cov_z = torch.einsum('bftc,bftd->bfcd', linear_spectra, linear_spectra.conj()) / time_len[:, None, None, None]    # (B, F, C, C)
+
+        col0 = cov_z[:, :, :, self.ref_ch]                                # (B, F, C)        
+        col00 = col0[:, :, self.ref_ch]                                   # (B, F)
+        
+        col0 = torch.cat((col0[:,:,self.ref_ch-1:self.ref_ch], col0[:,:,self.ref_ch+1:]), dim=-1)    # (B, F, C-1)
+        col00 = torch.complex(col00.real.clamp(self.eps), col00.imag.clamp(self.eps))
+        
+        c_rtf = col0 / col00[:, :, None]    # (B, F, C-1)
+        c_rtf = torch.cat((c_rtf.real, c_rtf.imag), dim=-1)    # (B, F, 2(C-1))
+
+        c_rtf = c_rtf.permute(0, 2, 1)    # (B, 2(C-1), F)
+
+        return c_rtf, vad_frame
 
 
     def vad_framing(self, vad_batch):
@@ -362,14 +389,16 @@ class main_model_for_doa(nn.Module):
                 _, feature, vad_frame = self.scl_model(mixed, vad)         # (B, 256)
                 feature = feature.unsqueeze(dim=1)                # (B, 1, 256)
         else:  
-            r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
-            comp = torch.complex(r, i)  # B x C x F x T
-            linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C
+            # r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
+            # comp = torch.complex(r, i)  # B x C x F x T
+            # linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C
             
-            mel_spect = self._get_mel_spectrogram(linear_spectra)
-            gcc = self._get_gcc(linear_spectra)
+            # mel_spect = self._get_mel_spectrogram(linear_spectra)
+            # gcc = self._get_gcc(linear_spectra)
             
-            feature = torch.cat((mel_spect, gcc), dim=1)       # (B, 10, 64, 501)
+            # feature = torch.cat((mel_spect, gcc), dim=1)       # (B, 10, 64, 501)
+            
+            feature, vad_frame = self.compressed_RTF(mixed, vad)
             
         
         out=self.crn(feature)   # (B, 3, 360)
