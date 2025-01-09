@@ -32,7 +32,7 @@ FFT:
   vad_threshold: 0.6666
 
 
-SCL: False
+SCL: True
 
 CRN:
 

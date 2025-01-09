@@ -24,22 +24,6 @@ class Weighted_SupConLoss(nn.Module):
         self.temperature = temperature
         self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
-        
-        # for key in weights:
-        #     weights[key]=np.array(weights[key])
-        #     last_weight[key]=np.array(last_weight[key])
-            
-        # self.weights=weights
-        # self.step_size=np.array(step_size)
-        # self.step_per_iter = step_per_iter
-        # self.last_weight = last_weight
-        # self.now_step=0
-
-
-        # if loss_resolution is None:
-        #     self.loss_resolution_list=[azi for azi in weights.keys()]
-        # else:
-        #     self.loss_resolution_list=loss_resolution
             
         self.azi_size=360
         self.degree_resolution=360/self.azi_size
@@ -98,8 +82,8 @@ class Weighted_SupConLoss(nn.Module):
         if labels.shape[0] != batch_size:
             raise ValueError('Num of labels does not match num of features')
         
-        # mask = self.generate_mask(labels).to(self.device)         # (256, 256)
-        mask = torch.eq(labels, labels.T).float().to(self.device)   # (B, B)
+        mask = self.generate_mask(labels).to(self.device)         # (256, 256)
+        # mask = torch.eq(labels, labels.T).float().to(self.device)   # (B, B)
         
 
         contrast_feature = features
@@ -121,20 +105,6 @@ class Weighted_SupConLoss(nn.Module):
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
         logits = anchor_dot_contrast - logits_max.detach()  # (512, 512)    # 수치적으로 안전하면서도 softmax의 계산 결과에는 영향을 주지 않음.
 
-        # tile mask
-        # mask = mask.repeat(anchor_count, self.contrast_count)    # (256, 256) -> (512, 512)
-        # mask-out self-contrast cases  => mask[i, i] = 0   # 대각선만 false인 행렬 생성
-        # logits_mask = torch.scatter(
-        #     torch.ones_like(mask),
-        #     1,
-        #     torch.arange(batch_size * anchor_count).view(-1, 1).to(self.device),
-        #     0
-        # )
-        
-        # logits = torch.div(torch.matmul(features, features.T), self.temperature)  # (512, 2048) (2048, 512) -> (512, 512)
-        # logits_max, _ = torch.max(logits, dim=1, keepdim=True)  # (512, 1)
-        # logits = logits - logits_max.detach()  # (512, 512)
-        
         logits_mask = torch.ones_like(mask).to(self.device) - torch.eye(batch_size, dtype=torch.float32).to(self.device)
         
         mask = mask * logits_mask       # i 샘플과 i 샘플은 비교하지 않음. false로 만들어줌. 아마 true인 경우만 분자에 올리려고 하나봄. 같은 class 아니어도 False.
@@ -153,89 +123,3 @@ class Weighted_SupConLoss(nn.Module):
         loss = loss.mean()                       # 모든 i에 대해서 평균을 냄. (1/N)
 
         return loss
-
-
-
-# class supervised_contrastive_learning_loss(_Loss):
-#     def __init__(self, weights=[1,1], step_size=0.9999, step_per_iter=1, last_weight=1, loss_resolution=None, size_average=None, reduce=None, reduction: str = 'mean', ):
-        
-#         super(supervised_contrastive_learning_loss, self).__init__(size_average, reduce, reduction)
-        
-#         for key in weights:
-#             weights[key]=np.array(weights[key])
-#             last_weight[key]=np.array(last_weight[key])
-            
-#         self.weights=weights
-#         self.step_size=np.array(step_size)
-#         self.step_per_iter = step_per_iter
-#         self.last_weight = last_weight
-#         self.now_step=0
-
-
-#         if loss_resolution is None:
-#             self.loss_resolution_list=[azi for azi in weights.keys()]
-#         else:
-#             self.loss_resolution_list=loss_resolution
-
-        
-
-    
-#     def forward(self, output_dict, target_dict,  mode='train'):
-
-        
-        
-#         loss_dict={}
-#         loss_batch_mean=0
-#         loss_each_batch=0
-
-#         if self.weights is not None:
-
-            
-            
-#             for azi in target_dict.keys():
-
-                
-                
-#                 if azi not in self.weights:
-#                     print('Weight does not have {} key'.format(azi))
-
-#                 if azi not in self.loss_resolution_list:
-#                     continue
-
-#                 target=target_dict[azi]
-#                 output=output_dict[azi]
-            
-#                 loss = self.weights[azi][0] * (target * torch.log(output)) + \
-#                     self.weights[azi][1] * ((1 - target) * torch.log(1 - output))
-
-#                 loss=torch.neg(loss)
-#                 loss_mean=loss.mean()
-#                 loss_dict[azi]=loss_mean
-#                 loss_batch_mean+=loss_mean
-#                 loss_each_batch+=loss.mean(dim=(1,2))
-                
-#         else:
-#             loss = target * torch.log(output) + (1 - target) * torch.log(1 - output)
-
-#         if mode == 'train':
-#             self.step() 
-
-#         return loss_dict, loss_batch_mean, loss_each_batch
-    
-#     def step(self):
-#         # check whether step is full
-#         self.now_step+=1
-#         if self.now_step<self.step_per_iter:
-#             return
-
-
-#         self.now_step=0
-#         for key in self.weights.keys():
-#             new_weight=self.weights[key]*self.step_size
-
-#             self.weights[key]=np.clip(new_weight, self.last_weight[key], self.weights[key])
-
-#         return 
-
-        
-
