@@ -31,9 +31,6 @@ FFT:
 
   vad_threshold: 0.6666
 
-
-SCL: True
-
 CRN:
 
   # input_audio_channel: 4

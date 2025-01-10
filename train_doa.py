@@ -66,7 +66,7 @@ class Learner_config():
         
         model_dir=importlib.import_module(model_import)
         
-        if self.args['model']['SCL']:
+        if self.args['hyparam']['SCL']:
             self.args['model']['CRN']['input_cnn_channel'] = 1
             self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
             

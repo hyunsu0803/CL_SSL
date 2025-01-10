@@ -94,8 +94,8 @@ class crn(nn.Module):
         self.azi_mapping_conv_layer=nn.ModuleList()
         self.azi_mapping_final=nn.ModuleList()
         
-        # args = [1024, 512, 1]
-        args = [512, 512, 1]
+        args = [1024, 512, 1]
+        # args = [512, 512, 1]
         kwargs['padding']=0
         
         self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (1024, 512, 1)
@@ -141,9 +141,9 @@ class main_model_for_doa(nn.Module):
     def __init__(self, config, config_scl=None, hyparam=None):
         super(main_model_for_doa, self).__init__()
         self.config=config
-        self.use_scl = self.config['SCL']
         self.config_scl=config_scl
         self.hyparam=hyparam
+        self.use_scl=self.hyparam['SCL']
         
         self.eps=np.finfo(np.float32).eps
         self.ref_ch=self.config['ref_ch']
