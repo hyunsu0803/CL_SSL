@@ -81,7 +81,13 @@ class Learner_config():
 
         model_dir=importlib.import_module(model_import)
         
-        self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
+        if self.args['hyparam']['SCL']:
+            self.args['model']['CRN']['input_cnn_channel'] = 1
+            self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
+            
+        else:
+            self.args['model']['CRN']['input_cnn_channel'] = 6
+            self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
 
         trained=torch.load(self.args['hyparam']['model'], map_location=self.device)     # only for infer
         self.model.load_state_dict(trained['model_state_dict'], )                       # only for infer

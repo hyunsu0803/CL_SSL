@@ -156,8 +156,8 @@ class Learner_config():
 
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
-        # self.model_select()     # set self.model
-        self.model_select_for_finetune()
+        self.model_select()     # set self.model
+        # self.model_select_for_finetune()
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()

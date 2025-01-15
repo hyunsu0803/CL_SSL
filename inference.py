@@ -116,13 +116,41 @@ class Logger_config():
         
         total_error_sum = self.save_config_dict['total_error_sum']
         number_of_degrees = self.save_config_dict['number_of_degrees']
+
         MAE = total_error_sum/number_of_degrees
+        acc_180 = self.save_config_dict['acc_180']/number_of_degrees * 100
+        acc_20 = self.save_config_dict['acc_20']/number_of_degrees  * 100
+        acc_10 = self.save_config_dict['acc_10']/number_of_degrees  * 100
+        acc_5 = self.save_config_dict['acc_5']/number_of_degrees    * 100
+        acc_3 = self.save_config_dict['acc_3']/number_of_degrees    * 100
+        acc_1 = self.save_config_dict['acc_1']/number_of_degrees    * 100
+
         print(f"MAE : {MAE:.2f}\n")
+        print(f"acc_180 : {acc_180:.2f}\n")
+        print(f"acc_20 : {acc_20:.2f}\n")
+        print(f"acc_10 : {acc_10:.2f}\n")
+        print(f"acc_5 : {acc_5:.2f}\n")
+        print(f"acc_3 : {acc_3:.2f}\n")
+        print(f"acc_1 : {acc_1:.2f}\n")
+
         os.makedirs(self.result_folder['inference_folder']+ self.room_type[0], exist_ok=True)
-        with open(self.result_folder['inference_folder']+ self.room_type[0]+f'/{epoch}_result_{MAE:.1f}.txt', 'w') as f:
+        with open(self.result_folder['inference_folder']+ self.room_type[0]+f'/{epoch}_result_{MAE:.1f}_acc.txt', 'w') as f:
 
             f.write('\nargmax_doa_error\n')
-            f.write(str(MAE)+'\n')
+            f.write(str(MAE)+'\n\n')
+
+            f.write('\nacc_180\n')
+            f.write(str(acc_180)+'\n')
+            f.write('\nacc_20\n')
+            f.write(str(acc_20)+'\n')
+            f.write('\nacc_10\n')
+            f.write(str(acc_10)+'\n')
+            f.write('\nacc_5\n')
+            f.write(str(acc_5)+'\n')
+            f.write('\nacc_3\n')
+            f.write(str(acc_3)+'\n')
+            f.write('\nacc_1\n')
+            f.write(str(acc_1)+'\n')
 
     
     def error_update(self, argmax_doa_error):
@@ -130,11 +158,30 @@ class Logger_config():
         self.save_config_dict['total_error_sum'] += argmax_doa_error
         self.save_config_dict['number_of_degrees'] += 1
 
+        if argmax_doa_error <= 180:
+            self.save_config_dict['acc_180'] += 1
+        if argmax_doa_error <= 20:
+            self.save_config_dict['acc_20'] += 1
+        if argmax_doa_error <= 10:
+            self.save_config_dict['acc_10'] += 1
+        if argmax_doa_error <= 5:
+            self.save_config_dict['acc_5'] += 1
+        if argmax_doa_error <= 3:
+            self.save_config_dict['acc_3'] += 1
+        if argmax_doa_error <= 1:
+            self.save_config_dict['acc_1'] += 1
+
   
     def config(self,):
         
         self.save_config_dict=dict()
 
+        self.save_config_dict['acc_1']=0
+        self.save_config_dict['acc_3']=0
+        self.save_config_dict['acc_5']=0
+        self.save_config_dict['acc_10']=0
+        self.save_config_dict['acc_20']=0
+        self.save_config_dict['acc_180']=0
         self.save_config_dict['total_error_sum']=0
         self.save_config_dict['number_of_degrees']=0
 
@@ -262,28 +309,6 @@ class Tester():
                     # os.makedirs('/root/mydir/results/spectrograms/', exist_ok=True)
                     # plt.savefig('/root/mydir/results/spectrograms/' + pkl_idx.split('.')[0]+ '.png')
                     # plt.close()
-                  
-
-                    # total_argmax_acc, \
-                    # total_softmax_acc, \
-                    # total_half_softmax_acc, \
-                    # total_argmax_doa_error, \
-                    # total_softmax_doa_error,\
-                    # total_half_softmax_doa_error, \
-                    # number_of_degrees_to_estimate   =   metric.mae.calc_rmsae(out, target, vad, num_spk, speech_azi,\
-                    #     calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
-                    #         acc_threshold=self.args['hyparam']['acc_threshold'],\
-                    #             local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
-
-                    # total_argmax_doa_error=(total_argmax_doa_error/number_of_degrees_to_estimate)**0.5
-                    # self.logger.error_update(room_type, 
-                    #                          total_argmax_acc, 
-                    #                          total_softmax_acc,
-                    #                          total_half_softmax_acc, 
-                    #                          total_argmax_doa_error, 
-                    #                          total_softmax_doa_error, 
-                    #                          total_half_softmax_doa_error,
-                    #                          number_of_degrees_to_estimate)
 
                     self.logger.error_update(error)
                     

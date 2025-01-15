@@ -1,9 +1,15 @@
 wandb:
-  wandb_ok: False
+  wandb_ok: True
   init:
-    project: 
+    project: cl_ssl
     entity: 
     name: 
+    config:
+      sigma:
+      snr:
+      with_coherent_noise:
+      coherent_noise_snr:
+      num_speaker:
     
 optimize_method: 'min'
 

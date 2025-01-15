@@ -1,15 +1,14 @@
 import torch
 import numpy as np
-# from torch.nn.modules.loss import _Loss
+import matplotlib.pyplot as plt
 
 
 """
 Author: Yonglong Tian (yonglong@mit.edu)
 Date: May 07, 2020
 """
-# from __future__ import print_function
 
-import torch
+
 import torch.nn as nn
 
 
@@ -46,6 +45,17 @@ class Weighted_SupConLoss(nn.Module):
         
 
         labelling=torch.exp(kappa_d*(torch.cos(distance)-1))    # (181)
+        
+        # print(labelling)
+        # plt.figure(figsize=(8, 4))
+        # plt.plot(torch.rad2deg(distance), labelling.numpy(), label="Labelling Curve")
+        # plt.title("Contrast Weight")
+        # plt.xlabel("Distance (degrees)")
+        # plt.ylabel("Labelling Value")
+        # plt.grid(True)
+        # plt.legend()
+        # plt.savefig("Labelling_Curve.png")
+        # exit()
         
         return labelling
 
@@ -103,23 +113,24 @@ class Weighted_SupConLoss(nn.Module):
             self.temperature)
         # for numerical stability
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
-        logits = anchor_dot_contrast - logits_max.detach()  # (512, 512)    # 수치적으로 안전하면서도 softmax의 계산 결과에는 영향을 주지 않음.
+        logits = anchor_dot_contrast - logits_max.detach()  # (512, 512)    # Numerically stable and does not affect the result of softmax computation.
 
         logits_mask = torch.ones_like(mask).to(self.device) - torch.eye(batch_size, dtype=torch.float32).to(self.device)
-        
-        mask = mask * logits_mask       # i 샘플과 i 샘플은 비교하지 않음. false로 만들어줌. 아마 true인 경우만 분자에 올리려고 하나봄. 같은 class 아니어도 False.
+
+        mask = mask * logits_mask       # Ensures that the i-th sample is not compared with itself by setting it to False. Likely to include only True values in the numerator, even if the same class is False.
 
         # compute log_prob
-        exp_logits = torch.exp(logits) * logits_mask        # (512, 512) # 대각선은 0이므로 exp(0) = 1, 자기 자신 제외 전체 샘플 비교한 것. 
-        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))  # (512, 512) - (512, 1) # 자기 자신 제외한 전체 샘플 - 각 샘플 별 log(exp(자기 자신 제외한 전체 샘플의 합))(이부분이 분모)
-        # 지금 분자에도 모든 샘플에 대한 similarity가 있음. 밑에서 mask를 곱해주면 weighted pos pair만 남음.
-         
+        exp_logits = torch.exp(logits) * logits_mask        # (512, 512) # The diagonal is 0, so exp(0) = 1; compares all samples except itself.
+        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))  # (512, 512) - (512, 1) # All samples except itself minus the log of the sum of exp(all samples except itself), which becomes the denominator.
+        # Currently, the numerator contains the similarity for all samples. After applying the mask, only the weighted positive pairs remain.
+
         mask_pos_pairs = mask.sum(1)                                            # (512,)    # |P(i)|
-        mask_pos_pairs = torch.where(mask_pos_pairs < 1e-6, 1, mask_pos_pairs)  # (512,)    # pos pair가 없는 경우 1로 대체, division by zero 방지
-        mean_log_prob_pos = (mask * log_prob).sum(1) / mask_pos_pairs           # (512,)    # 분자에 모든 pair의 similarity가 있었는데 mask를 곱해주면 pos pair만 남음.
+        mask_pos_pairs = torch.where(mask_pos_pairs < 1e-6, 1, mask_pos_pairs)  # (512,)    # Replace with 1 if there are no positive pairs to prevent division by zero.
+        mean_log_prob_pos = (mask * log_prob).sum(1) / mask_pos_pairs           # (512,)    # The numerator initially contained similarities for all pairs, but applying the mask leaves only positive pairs.
 
         # loss
         loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos # (512,)
-        loss = loss.mean()                       # 모든 i에 대해서 평균을 냄. (1/N)
+        loss = loss.mean()                       # Computes the mean across all samples (1/N).
+
 
         return loss
