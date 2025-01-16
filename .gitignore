@@ -7,3 +7,4 @@ prepared/
 baseline/__pycache__/pc_1 mic_gray_azimuth_60_elevation_95_wavfile_SMG_distance_15.wav
 pc_1 mic_gray_azimuth_60_elevation_95_wavfile_SMG_distance_15.wav
 __pycache__/
+wandb/

@@ -3,10 +3,7 @@ from torch import nn
 import torch
 from util import *
 import numpy as np
-import math
 import librosa
-import torchaudio.transforms as T
-from .CL_CRN import main_model_for_scl
 import importlib
 
 
@@ -188,7 +185,8 @@ class main_model_for_doa(nn.Module):
         trained=torch.load(self.trained_scl_model_path)#, map_location=self.device)     
         self.scl_model.load_state_dict(trained['model_state_dict'], )                       
         self.scl_model=torch.nn.DataParallel(self.scl_model, self.hyparam['GPGPU']['device_ids'])       
-        self.scl_model.eval()
+        # self.scl_model.eval()
+        self.scl_model.train()
         
 
     def sigma_update(self, iter_num, epoch):
@@ -385,19 +383,10 @@ class main_model_for_doa(nn.Module):
     def forward(self, mixed, vad, azi, iter_num, epoch, LOCATA=False):
 
         if self.use_scl:
-            with torch.no_grad():
-                _, feature, vad_frame = self.scl_model(mixed, vad)         # (B, 256)
-                feature = feature.unsqueeze(dim=1)                # (B, 1, 256)
+            # with torch.no_grad():
+            _, feature, vad_frame = self.scl_model(mixed, vad)         # (B, 256)
+            feature = feature.unsqueeze(dim=1)                # (B, 1, 256)
         else:  
-            # r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
-            # comp = torch.complex(r, i)  # B x C x F x T
-            # linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C
-            
-            # mel_spect = self._get_mel_spectrogram(linear_spectra)
-            # gcc = self._get_gcc(linear_spectra)
-            
-            # feature = torch.cat((mel_spect, gcc), dim=1)       # (B, 10, 64, 501)
-            
             feature, vad_frame = self.compressed_RTF(mixed, vad)
             
         

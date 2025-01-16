@@ -10,12 +10,12 @@ local_maximum_distance: 30
 SCL: True
 trained_scl_model_path: /root/clssl/experiment_5/results_sigma2_scl_1100/model_checkpoint/best_model.tar   # for scl
 
-model: /root/clssl/experiment_5/results_-10+10_scl+doa_50+40+100/model_checkpoint/best_model.tar
+model: /root/clssl/results/model_checkpoint/best_model.tar
 
 result_folder: 
   room_type: ['evaluation']
 
-  inference_folder: '/root/clssl/experiment_5/results_-10+10_scl+doa_50+40+100/'
+  inference_folder: '/root/clssl/results/'
   
 
 

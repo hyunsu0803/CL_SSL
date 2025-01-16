@@ -436,7 +436,7 @@ class speech_data_maker_for_doa(base_data_maker):
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, white_noise_snr = self.make_data(idx)
+        mixed, vad, azi_list, white_noise_snr = self.make_data(idx, with_coherent_noise=True)
         
         save_dict={}
         save_dict['noisy']=mixed    # tensor

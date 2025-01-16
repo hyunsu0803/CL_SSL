@@ -33,7 +33,7 @@ train:
 
   SNR: [5, 30]      # coherent noise
   spk_SNR: [-5, 5]  # multi-speaker
-  white_noise_snr: [-10, 10]
+  white_noise_snr: [5, 30]
   normalize_factor: [0.004, 1.0]  # white noise
  
 
@@ -96,7 +96,7 @@ val:
 
     pkl_dir: 
     
-    noise_dir: /root/clssl/MS-SNSD/
+    noise_dir: /root/clssl/MS-SNSD/noise_test/
     metadata_dir: /root/clssl/SSL_src/metadata/
 
     speech_dir: /root/clssl/LibriSpeech/test-clean/
@@ -125,7 +125,7 @@ val:
 
     SNR: [5, 30]      # coherent noise
     spk_SNR: [-5, 5]  # multi-speaker
-    white_noise_snr: [-10, 10]
+    white_noise_snr: [5, 30]
     normalize_factor: [0.004, 1.0]  # white noise
   
 
