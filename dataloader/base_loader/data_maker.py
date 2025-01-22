@@ -238,7 +238,7 @@ class base_data_maker(datamake):
         num_spk=random.randint(1, self.max_num_people) 
         
         
-        rirs, azi_list = self.rir_maker.create_rir(num_spk=num_spk, 
+        rirs, azi_list, ele_list = self.rir_maker.create_rir(num_spk=num_spk, 
                                                 with_coherent_noise=with_coherent_noise, 
                                                 mic_type=self.args['mic_type'], 
                                                 mic_num=self.args['mic_num'],
@@ -260,6 +260,7 @@ class base_data_maker(datamake):
         
         speech_rirs=rirs[:num_spk]
         azi_list=azi_list[:num_spk]
+        ele_list=ele_list[:num_spk]
       
       
         ##### speech
@@ -315,6 +316,7 @@ class base_data_maker(datamake):
 
         for i in range(self.max_num_people-num_spk):
             azi_list.append(0)
+            ele_list.append(0)
         mixed=mixed.astype('float32')
         vad=vad.astype('float32')
         # mixed : (4, 64000)
@@ -326,7 +328,7 @@ class base_data_maker(datamake):
         # vad & azi_list == torch.tensor
         vad, azi_list=self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)
         
-        return torch.from_numpy(mixed), vad, azi_list, white_noise_snr
+        return torch.from_numpy(mixed), vad, azi_list, torch.tensor(ele_list), white_noise_snr, torch.from_numpy(s_clean)
     
     def arrange_data(self, idx):
         azimuth_deg = idx
@@ -335,28 +337,33 @@ class base_data_maker(datamake):
         vad_list = []
         white_noise_snr_list = []
         azi_list_list = []
+        ele_list_list = []
+        s_clean_list = []
         
         for room_info in self.rooms:
             # tensor, tensor, tensor,   float     # tensor는 model에 들어감
-            mixed, vad, azi_list, white_noise_snr = self.make_data(idx=None, 
+            mixed, vad, azi_list, ele_list, white_noise_snr, s_clean = self.make_data(idx=None, 
                                                                     room_info=room_info, 
                                                                     azimuth_deg=azimuth_deg, 
                                                                     with_coherent_noise=False)
             mixed_list.append(mixed)
             vad_list.append(vad)
             azi_list_list.append(azi_list)
+            ele_list_list.append(ele_list)
             white_noise_snr_list.append(white_noise_snr)
+            s_clean_list.append(s_clean)
         
         mixed = torch.stack(mixed_list)
         vad = torch.stack(vad_list)
         azi_list = torch.stack(azi_list_list)
+        ele_list = torch.stack(ele_list_list)
+        # s_clean = torch.stack(s_clean_list)
         
         
-        return mixed, vad, azi_list, white_noise_snr_list
+        return mixed, vad, azi_list, ele_list, white_noise_snr_list#, s_clean
     
     
     def __getitem__(self, idx):
-        # print(idx, end=' ')
         return self.make_data(idx=idx)
     
 
@@ -386,7 +393,6 @@ class speech_data_maker_for_scl(base_data_maker):
         print('speech_csv', self.args['speech_csv'])
         print('noise_csv', self.args['noise_csv'])
         
-        # self.pkl_dir=self.args['pkl_dir']
         self.pkl_dir = '/root/clssl/SSL_src/prepared/pkl/scl/'
         os.makedirs(self.pkl_dir, exist_ok=True)
         
@@ -396,15 +402,16 @@ class speech_data_maker_for_scl(base_data_maker):
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, white_noise_snr_list = self.arrange_data(idx)
+        mixed, vad, azi_list, ele_list, white_noise_snr_list, s_clean = self.arrange_data(idx)
         
         save_dict={}
         save_dict['noisy']=mixed    # tensor
         save_dict['vad']=vad        # tensor
         save_dict['azi']=azi_list   # tensor
+        save_dict['ele']=ele_list   # tensor
+        save_dict['clean']=s_clean
         save_dict['white_noise_snr_list']=white_noise_snr_list  # list
-        
-        # azi_dir = str(int(azi_list[0])) + '/'
+
         
         pkl_name = list(azi_list[0].numpy()) + white_noise_snr_list
         pkl_name = [str(int(i)) for i in pkl_name]
@@ -430,18 +437,18 @@ class speech_data_maker_for_doa(base_data_maker):
         print('speech_csv', self.args['speech_csv'])
         print('noise_csv', self.args['noise_csv'])
         
-        # self.pkl_dir=self.args['pkl_dir']
         self.pkl_dir = '/root/clssl/SSL_src/prepared/pkl/doa/'
         os.makedirs(self.pkl_dir, exist_ok=True)
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, white_noise_snr = self.make_data(idx, with_coherent_noise=True)
+        mixed, vad, azi_list, ele_list, white_noise_snr = self.make_data(idx, with_coherent_noise=True)
         
         save_dict={}
         save_dict['noisy']=mixed    # tensor
         save_dict['vad']=vad        # tensor
         save_dict['azi']=azi_list   # tensor
+        save_dict['ele']=ele_list
         save_dict['white_noise_snr_list']=white_noise_snr  # list
         
         
@@ -459,36 +466,3 @@ class speech_data_maker_for_doa(base_data_maker):
     def __getitem__(self, idx):
         return self.save_data(idx)
 
-
-# pkl making
-class gunshot_data_maker(base_data_maker):
-    def __init__(self, args):
-        super(gunshot_data_maker, self).__init__(args)
-        
-        print('speech_csv', self.args['speech_csv'])
-        print('noise_csv', self.args['noise_csv'])
-        
-        self.pkl_dir=self.args['pkl_dir']
-        os.makedirs(self.pkl_dir, exist_ok=True)
-               
-
-    def save_data(self, idx):
-            mixed, vad, azi_list, num_spk, fs= self.make_data(idx, with_coherent_noise=True)
-            save_dict={}
-            save_dict['noisy']=mixed
-            save_dict['vad']=vad
-            save_dict['azi']=azi_list
-            save_dict['num_spk']=num_spk
-            save_dict['fs']=fs
-
-            pkl_name=self.pkl_dir+str(idx)+'.pkl'
-            output=open(pkl_name, 'wb')
-            pickle.dump(save_dict, output)
-            output.close()
-            
-            return 1, 2, 3, 4
-            
-        
-    def __getitem__(self, idx):
-        return self.save_data(idx)
-    

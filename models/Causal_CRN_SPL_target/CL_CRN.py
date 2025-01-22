@@ -120,7 +120,6 @@ class main_model_for_scl(nn.Module):
         self.config=config
         
         self.eps=np.finfo(np.float32).eps
-        # self.eps=1e-3
         self.ref_ch=self.config['ref_ch']
 
         ###### sigma
@@ -192,33 +191,6 @@ class main_model_for_scl(nn.Module):
                     self.epoch_count=0
                     return 
 
-    
-    def make_weight(self, azi):
-        
-        azi_target=torch.div(azi, 360//self.azi_size, rounding_mode='floor').long()     # (B, 1)
-        azi_range=torch.arange(0, self.azi_size).unsqueeze(0).to(azi_target.device)     # (1, 360)
-
-        distance=azi_target.unsqueeze(-1)*self.degree_resolution-azi_range*self.degree_resolution   # (B, 1, 360) = (B, 1, 1) - (1, 360)
-        
-        distance_abs=torch.abs(distance)
-        distance_abs=torch.stack((distance_abs, 360-distance_abs), dim=0)       # distance_abs : (2, B, 1, 360)
-     
-        distance=torch.min(distance_abs, dim=0).values                          # distance : (B, 1, 360)
-        distance=torch.deg2rad(distance).unsqueeze(1)                           # distance : (B, 1, 1, 360)
-        
-        sigma=self.sigma.view(1,-1, 1,1).to(distance.device)                    # (1, 3, 1, 1)
-        sigma=torch.deg2rad(sigma)
-        kappa_d=torch.log(self.p)/(torch.cos(sigma)-1)                          # (1, 3, 1, 1)
-        
-
-        labelling=torch.exp(kappa_d*(torch.cos(distance)-1)).unsqueeze(-1)      # (B, 3, 1, 360, 1)  
-        
-        return labelling
-
-        # self.sigma_update(iter_num, epoch)
-       
-
-    
 
     def irtf_feature(self, mixed, vad):  
         mixed_max = mixed.max()
@@ -302,37 +274,11 @@ class main_model_for_scl(nn.Module):
         return c_rtf, vad_frame
 
 
-    # def vad_framing(self, vad_batch):
-
-    #     vad_output_th = vad_batch.mean(axis=2) > 2 / 3
-        
-    #     vad_output_th = vad_output_th[:, np.newaxis, :, np.newaxis, np.newaxis]
-    #     vad_output_th = torch.from_numpy(vad_output_th.astype(float)).to(maps.device)
-    #     repeat_factor = np.array(maps.shape)
-    #     repeat_factor[:-2] = 1
-    #     maps *= vad_output_th.float().repeat(repeat_factor.tolist())
-
-    
-    # def target_flip(self, target):
-
-  
-
-    #     target_flipped=torch.flip(target, dims=[2])
-    #     target_flipped=torch.roll(target_flipped, dims=2, shifts=1)
-    #     target_cat=torch.stack([target_flipped, target], dim=0)
-    #     target=torch.max(target_cat, dim=0).values
-
- 
-    #     return target
-
         
     def forward(self, mixed, vad):
         
         feature, vad_frame = self.compressed_RTF(mixed, vad)    # (B, 2(C-1), F), (B, 1, T)
-        # feature, vad_frame=self._get_gcc(mixed, vad)
-        
-        
-        # model forward
+
         out, embedding = self.crn(feature)   # (B, 128), (B, 256)
         
         

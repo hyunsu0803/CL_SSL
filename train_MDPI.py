@@ -320,19 +320,56 @@ class Trainer():
             self.validation(epoch)           
             
             self.logger.epoch_finish(epoch, self.model, self.optimizer)
+
+
+    def tetrahedral_mic_pos(self):
+        m1 = self.spherical_to_cartesian(45, 35, 4.2)
+        m2 = self.spherical_to_cartesian(-45, -35, 4.2)
+        m3 = self.spherical_to_cartesian(135, -35, 4.2)
+        m4 = self.spherical_to_cartesian(-135, 35, 4.2)
+        
+        pos_4 = np.array([m1, m2, m3, m4])
+        
+        return pos_4/100
+
+    def make_ideal_cov(self, speech_azi, speech_ele, s_clean):
+
+        sound_speed = 343
+
+        speech_azi = np.deg2rad(speech_azi.numpy())
+        speech_ele = np.deg2rad(speech_ele.numpy())
+
+        source_direction = np.array([
+            np.cos(speech_ele) * np.cos(speech_azi),
+            np.cos(speech_ele) * np.sin(speech_azi),
+            np.sin(speech_ele)
+        ])
+        mic_positions = self.tetrahedral_mic_pos()
+
+        time_delays = np.dot(mic_positions, source_direction) / sound_speed
+
+        steering_vector = None
+
+
             
            
-    def permute_n_augment(self, mixed, vad, speech_azi):
+    def permute_n_augment(self, mixed, vad, speech_azi, speech_ele, s_clean):
         
         mixed = mixed.reshape(-1, mixed.shape[-2], mixed.shape[-1])
         vad = vad.reshape(-1, vad.shape[-2], vad.shape[-1])
         speech_azi = speech_azi.reshape(-1, speech_azi.shape[-1])
+        speech_ele = speech_ele.reshape(-1, speech_ele.shape[-1])
+
+        y_ideal = self.make_ideal_cov(speech_azi, speech_ele, s_clean)
+        y_real = self.make_real_cov(mixed, vad)
+         
             
-        perm = torch.randperm(mixed.size(0)) # (size : 256)
+        perm = torch.randperm(mixed.size(0)) # (size : ?)
         
         mixed = mixed.index_select(0, perm)  
         vad = vad.index_select(0, perm)  
         speech_azi = speech_azi.index_select(0, perm)
+        speech_ele = speech_ele.index_select(0, perm)
         
         return mixed, vad, speech_azi
     
@@ -347,11 +384,11 @@ class Trainer():
             
         self.n_room = 8
         self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
-        for iter_num, (mixed, vad, speech_azi, speech_ele,_) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+        for iter_num, (mixed, vad, speech_azi, speech_ele, _, s_clean) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
             # mixed : [64, 8, 4, 64000]
             # vad : [64, 8, 1, 64000]
             # speech_azi : [64, 8, 1]
-            mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
+            mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi, speech_ele, s_clean)
             # mixed : [512, 4, 64000]   
             # vad : [512, 1, 64000]
             # speech_azi : [512, 1]

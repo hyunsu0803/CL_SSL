@@ -1,8 +1,5 @@
 train:
 
-  # speech_dir: /root/clssl/SiTEC/
-  # vad_dir: /root/clssl/SSL_src/prepared/vad/SiTEC/
-
   noise_dir: /root/clssl/MS-SNSD/
   metadata_dir: /root/clssl/SSL_src/metadata/
 
@@ -18,10 +15,10 @@ train:
   degree_resolution: 1
 
   dataloader_dict:
-    # batch_size: 64 
-    batch_size: 16
+    batch_size: 64 
+    # batch_size: 16
     shuffle: True
-    num_workers: 16
+    num_workers: 4
     drop_last: False
 
   mic_type: tetra 
@@ -75,17 +72,17 @@ train:
 val:
   loader:
 
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/doa/
+    pkl_dir: /root/clssl/SSL_src/prepared/pkl/scl/
 
     num_spk: 1  # for real DataLoader
     ans_azi: 0                                        
     degree_resolution: 1                              
 
     dataloader_dict:        # essential for real DataLoader
-      # batch_size: 64 
-      batch_size: 1
+      batch_size: 64 
+      # batch_size: 1
       shuffle: True
-      num_workers: 0 
+      num_workers: 4 
       drop_last: False
 
     mic_type: tetra 
