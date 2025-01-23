@@ -95,6 +95,8 @@ class Learner_config():
 
 
     def init_optimizer(self):
+
+        self.args['learner']['optimizer']['config']['lr'] = 1.0e-3
         
         a=importlib.import_module('torch.optim')
         assert hasattr(a, self.args['learner']['optimizer']['type']), "optimizer {} is not in {}".format(self.args['learner']['optimizer']['type'], 'torch')
@@ -105,6 +107,9 @@ class Learner_config():
     
         
     def init_optimzer_scheduler(self, ):
+
+        self.args['learner']['optimizer_scheduler']['config']['min_lr'] = 8.0e-4
+
         a=importlib.import_module('torch.optim.lr_scheduler')
         assert hasattr(a, self.args['learner']['optimizer_scheduler']['type']), "optimizer scheduler {} is not in {}".format(self.args['learner']['optimizer']['type'], 'torch')
         a=getattr(a, self.args['learner']['optimizer_scheduler']['type'])
@@ -196,9 +201,9 @@ class Logger_config():
         self.csv['test_epoch_loss']=[]
         self.csv['test_best_loss']=[]
 
-        self.csv_dir=self.args['logger']['save_csv']
-        self.model_save_dir=self.args['logger']['model_save_dir']
-        self.png_dir=self.args['logger']['png_dir']
+        self.csv_dir=self.args['logger']['save_csv'].replace('result', 'result_only_doa')
+        self.model_save_dir=self.args['logger']['model_save_dir'].replace('result', 'result_only_doa')
+        self.png_dir=self.args['logger']['png_dir'].replace('result', 'result_only_doa')
 
         if self.args['logger']['optimize_method']=='min':
             self.best_test_loss=math.inf
@@ -300,6 +305,12 @@ class Dataloader_config():
         self.args=args
         
     def config(self):
+
+        self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 16
+        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 8
+        self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
+        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 0
+        self.args['dataloader']['val']['loader']['pkl_dir'] = '/root/clssl/SSL_src/prepared/pkl/doa/'
         
         self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
         self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])

@@ -83,6 +83,8 @@ class Learner_config():
 
 
     def init_optimizer(self):
+
+        self.args['learner']['optimizer']['config']['lr'] = 1.0e-4
         
         a=importlib.import_module('torch.optim')
         assert hasattr(a, self.args['learner']['optimizer']['type']), "optimizer {} is not in {}".format(self.args['learner']['optimizer']['type'], 'torch')
@@ -90,9 +92,12 @@ class Learner_config():
      
         self.optimizer=a(self.model.parameters(), **self.args['learner']['optimizer']['config'])
         self.gradient_clip=self.args['learner']['optimizer']['gradient_clip']
-    
+
         
     def init_optimzer_scheduler(self, ):
+
+        self.args['learner']['optimizer_scheduler']['config']['min_lr'] = 9.0e-5
+
         a=importlib.import_module('torch.optim.lr_scheduler')
         assert hasattr(a, self.args['learner']['optimizer_scheduler']['type']), "optimizer scheduler {} is not in {}".format(self.args['learner']['optimizer']['type'], 'torch')
         a=getattr(a, self.args['learner']['optimizer_scheduler']['type'])
@@ -277,6 +282,12 @@ class Dataloader_config():
         self.args=args
         
     def config(self):
+
+        self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 64
+        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 4
+        self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 64
+        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 4
+        self.args['dataloader']['val']['loader']['pkl_dir'] = '/root/clssl/SSL_src/prepared/pkl/scl/'
         
         self.train_loader=Train_dataload_for_scl(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
         self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])

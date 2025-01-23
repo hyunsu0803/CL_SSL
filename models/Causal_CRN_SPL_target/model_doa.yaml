@@ -33,8 +33,9 @@ FFT:
 
 CRN:
 
-  # input_audio_channel: 4
+  
   input_cnn_channel: 
+  input_mapping_dim:
 
 
   CNN:

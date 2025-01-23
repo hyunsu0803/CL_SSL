@@ -17,5 +17,5 @@ save_csv: /root/clssl/results/logger/log.csv
 png_dir: /root/clssl/results/logger/loss.png
 
 model_save_dir: /root/clssl/results/model_checkpoint/
-out_txt:
-  dir: /root/clssl/results/logger/exp.txt
+# out_txt:
+#   dir: /root/clssl/results/logger/exp.txt
