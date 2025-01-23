@@ -277,21 +277,21 @@ class acoustic_simulator_on_the_fly(simulator_common):
              
             azi_fluctuation=0.0
             
-            azi=np.deg2rad(azi_deg+theta+azi_fluctuation+self.rir_character_dict['ref_vec'])
+            azi_rad=np.deg2rad(azi_deg+theta+azi_fluctuation+self.rir_character_dict['ref_vec'])
             
-            ele=random.uniform(*self.rir_character_dict['room']['elevation'][:2])
-            ele=np.deg2rad(ele)
+            ele_deg=random.uniform(*self.rir_character_dict['room']['elevation'][:2])
+            ele_rad=np.deg2rad(ele_deg)
 
-            x=r*np.sin(ele)*np.cos(azi)
-            y=r*np.sin(ele)*np.sin(azi)
-            z=r*np.cos(ele)
+            x=r*np.sin(ele_rad)*np.cos(azi_rad)
+            y=r*np.sin(ele_rad)*np.sin(azi_rad)
+            z=r*np.cos(ele_rad)
          
             speech_pos=mic_center+ np.array([x,y,z])
 
             if 0<speech_pos[0]<room_sz[0] and 0<speech_pos[1]<room_sz[1] and 0<speech_pos[2]<room_sz[2]:
                 break
     
-        return speech_pos, azi_deg
+        return speech_pos, azi_deg, ele_deg
     
     
 
@@ -461,7 +461,7 @@ class acoustic_simulator_on_the_fly(simulator_common):
             if azimuth_deg is not None:
                 speech_pos, azi_deg, ele_deg=self.get_source_pos_for_scl(theta, azi_list, linear_azi_pos, mic_center, room_sz, azimuth_deg)
             else:
-                speech_pos, azi_deg=self.get_source_pos_for_doa(theta, azi_list, linear_azi_pos, mic_center, room_sz)
+                speech_pos, azi_deg, ele_deg=self.get_source_pos_for_doa(theta, azi_list, linear_azi_pos, mic_center, room_sz)
             
             speech_pos_list.append(speech_pos)
 

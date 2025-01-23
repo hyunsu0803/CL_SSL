@@ -2,7 +2,7 @@ torch_start_method: 'forkserver'
 randomseed: 0
 
 
-last_epoch: 1000
+last_epoch: 150
 resume_epoch: 0
 
 GPGPU:
@@ -11,4 +11,4 @@ GPGPU:
 model: /root/clssl/results_-10+10_scl+doa_50+40/model_checkpoint/best_model.tar  # only for fine-tuning
 
 SCL: True
-trained_scl_model_path: /root/clssl/experiment_5/results_sigma2_scl_1100/model_checkpoint/best_model.tar   # for scl
+trained_scl_model_path: /root/clssl/results_scl_221628/model_checkpoint/best_model.tar   # for scl

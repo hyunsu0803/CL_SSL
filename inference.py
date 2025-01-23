@@ -134,7 +134,7 @@ class Logger_config():
         print(f"acc_1 : {acc_1:.2f}\n")
 
         os.makedirs(self.result_folder['inference_folder']+ self.room_type[0], exist_ok=True)
-        with open(self.result_folder['inference_folder']+ self.room_type[0]+f'/{epoch}_result_{MAE:.1f}_withco.txt', 'w') as f:
+        with open(self.result_folder['inference_folder']+ self.room_type[0]+f'/result_{MAE:.2f}.txt', 'w') as f:
 
             f.write('\nargmax_doa_error\n')
             f.write(str(MAE)+'\n\n')
