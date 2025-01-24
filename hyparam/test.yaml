@@ -20,4 +20,4 @@ result_folder:
 
 
 GPGPU:
-  device_ids: [0]
+  device_ids: [2, 3]

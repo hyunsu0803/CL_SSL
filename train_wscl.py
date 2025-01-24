@@ -37,6 +37,7 @@ class Hyparam_set():
 
             device_primary_num=self.args['hyparam']['GPGPU']['device_ids'][0]
             device= 'cuda'+':'+str(device_primary_num)
+            print(device)
         else:
             device= 'cpu'
             print("device : cpu")   
@@ -156,8 +157,8 @@ class Learner_config():
 
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
-        self.model_select()     # set self.model
-        # self.model_select_for_finetune()
+        # self.model_select()     # set self.model
+        self.model_select_for_finetune()
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()
@@ -410,11 +411,11 @@ class Trainer():
 if __name__=='__main__':
     args=sys.argv[1:]
     
-    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model_scl.yaml', 
-            'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
-            'hyparam /root/clssl/SSL_src/hyparam/train.yaml', 
-            'learner /root/clssl/SSL_src/hyparam/learner.yaml', 
-            'logger /root/clssl/SSL_src/hyparam/logger.yaml']
+    args = ['model /root/hyunsoo/clssl/SSL_src/models/Causal_CRN_SPL_target/model_scl.yaml', 
+            'dataloader /root/hyunsoo/clssl/SSL_src/dataloader/data_loader.yaml', 
+            'hyparam /root/hyunsoo/clssl/SSL_src/hyparam/train.yaml', 
+            'learner /root/hyunsoo/clssl/SSL_src/hyparam/learner.yaml', 
+            'logger /root/hyunsoo/clssl/SSL_src/hyparam/logger.yaml']
     
     args=util.util.get_yaml_args(args)
     t=Trainer(args)

@@ -328,7 +328,7 @@ class base_data_maker(datamake):
         # vad & azi_list == torch.tensor
         vad, azi_list=self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)
         
-        return torch.from_numpy(mixed), vad, azi_list, torch.tensor(ele_list), white_noise_snr, torch.from_numpy(s_clean)
+        return torch.from_numpy(mixed), vad, azi_list, torch.tensor(ele_list), white_noise_snr
     
     def arrange_data(self, idx):
         azimuth_deg = idx
@@ -338,11 +338,10 @@ class base_data_maker(datamake):
         white_noise_snr_list = []
         azi_list_list = []
         ele_list_list = []
-        s_clean_list = []
         
         for room_info in self.rooms:
             # tensor, tensor, tensor,   float     # tensor는 model에 들어감
-            mixed, vad, azi_list, ele_list, white_noise_snr, s_clean = self.make_data(idx=None, 
+            mixed, vad, azi_list, ele_list, white_noise_snr = self.make_data(idx=None, 
                                                                     room_info=room_info, 
                                                                     azimuth_deg=azimuth_deg, 
                                                                     with_coherent_noise=False)
@@ -351,16 +350,14 @@ class base_data_maker(datamake):
             azi_list_list.append(azi_list)
             ele_list_list.append(ele_list)
             white_noise_snr_list.append(white_noise_snr)
-            s_clean_list.append(s_clean)
         
         mixed = torch.stack(mixed_list)
         vad = torch.stack(vad_list)
         azi_list = torch.stack(azi_list_list)
         ele_list = torch.stack(ele_list_list)
-        # s_clean = torch.stack(s_clean_list)
         
         
-        return mixed, vad, azi_list, ele_list, white_noise_snr_list#, s_clean
+        return mixed, vad, azi_list, ele_list, white_noise_snr_list
     
     
     def __getitem__(self, idx):
@@ -382,6 +379,9 @@ class train_data_maker_for_scl(base_data_maker):
 class train_data_maker_for_doa(base_data_maker):
     def __init__(self, args):
         super(train_data_maker_for_doa, self).__init__(args)
+
+    def __getitem__(self, idx):
+        return self.make_data(idx=idx, with_coherent_noise=True)
     
     
 
@@ -402,14 +402,13 @@ class speech_data_maker_for_scl(base_data_maker):
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, ele_list, white_noise_snr_list, s_clean = self.arrange_data(idx)
+        mixed, vad, azi_list, ele_list, white_noise_snr_list = self.arrange_data(idx)
         
         save_dict={}
         save_dict['noisy']=mixed    # tensor
         save_dict['vad']=vad        # tensor
         save_dict['azi']=azi_list   # tensor
         save_dict['ele']=ele_list   # tensor
-        save_dict['clean']=s_clean
         save_dict['white_noise_snr_list']=white_noise_snr_list  # list
 
         

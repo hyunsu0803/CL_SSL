@@ -350,7 +350,7 @@ class Trainer():
         self.model.train()
 
         
-        for iter_num, (mixed, vad, speech_azi, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+        for iter_num, (mixed, vad, speech_azi, speech_ele, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
             
             
             mixed=mixed.to(self.hyperparameter.device)

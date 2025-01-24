@@ -145,6 +145,8 @@ class main_model_for_doa(nn.Module):
         self.eps=np.finfo(np.float32).eps
         self.ref_ch=self.config['ref_ch']
 
+        self.device = torch.device('cuda:2')
+
         ###### sigma
 
         self.p=torch.tensor(self.config['p'])
@@ -184,8 +186,8 @@ class main_model_for_doa(nn.Module):
 
         trained=torch.load(self.trained_scl_model_path)#, map_location=self.device)     
         self.scl_model.load_state_dict(trained['model_state_dict'], )                       
-        self.scl_model=torch.nn.DataParallel(self.scl_model, self.hyparam['GPGPU']['device_ids'])       
-        # self.scl_model.eval()
+        # self.scl_model=torch.nn.DataParallel(self.scl_model, self.hyparam['GPGPU']['device_ids'])       
+
         self.scl_model.train()
         
 
@@ -228,7 +230,7 @@ class main_model_for_doa(nn.Module):
                     self.epoch_count+=1
                 
                 if self.epoch_count==self.config['epoch']['update_period']:
-                    print('sigma_epoch update')
+                    # print('sigma_epoch update')
                     update()
                     self.epoch_count=0
                     return 
@@ -383,7 +385,7 @@ class main_model_for_doa(nn.Module):
     def forward(self, mixed, vad, azi, iter_num, epoch, LOCATA=False):
 
         if self.use_scl:
-            # with torch.no_grad():
+
             _, feature, vad_frame = self.scl_model(mixed, vad)         # (B, 256)
             feature = feature.unsqueeze(dim=1)                # (B, 1, 256)
         else:  

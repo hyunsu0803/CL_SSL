@@ -1,10 +1,10 @@
 train:
 
-  noise_dir: /root/clssl/MS-SNSD/
-  metadata_dir: /root/clssl/SSL_src/metadata/
+  noise_dir: /root/hyunsoo/MS-SNSD/
+  metadata_dir: /root/hyunsoo/clssl/SSL_src/metadata/
 
-  speech_dir: /root/clssl/LibriSpeech/train-clean-100/
-  vad_dir: /root/clssl/SSL_src/prepared/vad/train-clean-100/
+  speech_dir: /root/hyunsoo/LibriSpeech/train-clean-100/
+  vad_dir: /root/hyunsoo/clssl/SSL_src/prepared/vad/train-clean-100/
   
   speech_csv: train_librispeech.csv
   noise_csv: train_noise.csv
@@ -15,10 +15,10 @@ train:
   degree_resolution: 1
 
   dataloader_dict:
-    batch_size: 64 
-    # batch_size: 16
+    # batch_size: 64 
+    batch_size: 16
     shuffle: True
-    num_workers: 4
+    num_workers: 16
     drop_last: False
 
   mic_type: tetra 
@@ -72,17 +72,17 @@ train:
 val:
   loader:
 
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/scl/
+    pkl_dir: /root/hyunsoo/clssl/SSL_src/prepared/pkl/doa/
 
     num_spk: 1  # for real DataLoader
     ans_azi: 0                                        
     degree_resolution: 1                              
 
     dataloader_dict:        # essential for real DataLoader
-      batch_size: 64 
-      # batch_size: 1
+      # batch_size: 64 
+      batch_size: 1
       shuffle: True
-      num_workers: 4 
+      num_workers: 0
       drop_last: False
 
     mic_type: tetra 
@@ -93,11 +93,11 @@ val:
 
     pkl_dir: 
     
-    noise_dir: /root/clssl/MS-SNSD/noise_test/
-    metadata_dir: /root/clssl/SSL_src/metadata/
+    noise_dir: /root/hyunsoo/MS-SNSD/noise_test/
+    metadata_dir: /root/hyunsoo/clssl/SSL_src/metadata/
 
-    speech_dir: /root/clssl/LibriSpeech/test-clean/
-    vad_dir: /root/clssl/SSL_src/prepared/vad/test-clean/
+    speech_dir: /root/hyunsoo/LibriSpeech/test-clean/
+    vad_dir: /root/hyunsoo/clssl/SSL_src/prepared/vad/test-clean/
     
     speech_csv: test_librispeech.csv
     noise_csv: val_noise.csv
@@ -162,7 +162,7 @@ val:
   
 test:
   loader:
-    pkl_dir: /root/clssl/SSL_src/prepared/pkl/doa/ 
+    pkl_dir: /root/hyunsoo/clssl/SSL_src/prepared/pkl/doa/ 
   
 
     ans_azi: 0
