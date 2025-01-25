@@ -1,5 +1,5 @@
 wandb:
-  wandb_ok: True
+  wandb_ok: False
   init:
     project: cl_ssl
     entity: 

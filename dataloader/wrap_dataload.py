@@ -32,6 +32,7 @@ def Train_dataload_for_doa(args, init_seed):
                                             pin_memory=True,
                                             worker_init_fn=seed_worker,
                                             generator=g,
+                                            persistent_workers=True,
                                             **args['dataloader_dict']
                                             )
     

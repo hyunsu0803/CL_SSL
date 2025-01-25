@@ -233,7 +233,7 @@ class main_model_for_doa(nn.Module):
                     self.epoch_count+=1
                 
                 if self.epoch_count==self.config['epoch']['update_period']:
-                    print('sigma_epoch update')
+                    # print('sigma_epoch update')
                     update()
                     self.epoch_count=0
                     return 
