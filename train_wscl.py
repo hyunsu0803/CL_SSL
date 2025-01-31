@@ -123,38 +123,51 @@ class Learner_config():
             self.best_train_loss=-math.inf
 
 
-    def train_update(self, output, labels):
+    def train_update(self, outputs, labels):
          
-        with torch.cuda.amp.autocast():
-            loss_mean = self.loss_func(output, labels)
+        losses = []
+        for out, sigma in zip(outputs, self.sigma):
+            
+            loss_mean = self.loss_func(out, labels, sigma)
 
 
-        if torch.isnan(loss_mean):
-            print('nan occured')
-            self.optimizer.zero_grad()
-            return loss_mean
+            if torch.isnan(loss_mean):
+                print('nan occured')
+                self.optimizer.zero_grad()
+                return loss_mean
 
-        
-        self.scaler.scale(loss_mean).backward()
+            losses.append(loss_mean)
+
+        # loss_mean = torch.stack(losses)
+        loss_mean = sum(losses) / len(losses)
+            
+        loss_mean.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+        self.optimizer.step()
         self.optimizer.zero_grad()
         
 
         return loss_mean
 
 
-    def test_update(self, output, labels):
+    def test_update(self, outputs, labels):
         
-        with torch.cuda.amp.autocast():
-            loss_mean = self.loss_func(output, labels)
-        
+        # with torch.cuda.amp.autocast():
+        losses = []
+        for out, sigma in zip(outputs, self.sigma):
+            
+            loss_mean = self.loss_func(out, labels, sigma)
 
-        if torch.isnan(loss_mean):
-            print('nan occured')
-            self.optimizer.zero_grad()
-            return loss_mean
+
+            if torch.isnan(loss_mean):
+                print('nan occured')
+                self.optimizer.zero_grad()
+                return loss_mean
+
+            losses.append(loss_mean)
+
+        # loss_mean = torch.stack(losses)
+        loss_mean = sum(losses) / len(losses)
 
         return loss_mean
 
@@ -166,6 +179,7 @@ class Learner_config():
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()
+        self.sigma = [0, 3, 9]
         return self.args
 
 
@@ -287,7 +301,7 @@ class Dataloader_config():
         self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 4
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 64
         self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 4
-        self.args['dataloader']['val']['loader']['pkl_dir'] = '/root/clssl/SSL_src/prepared/pkl/scl/'
+        self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/scl/'
         
         self.train_loader=Train_dataload_for_scl(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
         self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])
@@ -354,7 +368,7 @@ class Trainer():
 
         torch.cuda.empty_cache()
         
-        # with torch.cuda.amp.autocast():
+
             
         self.n_room = 8
         self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
@@ -372,13 +386,13 @@ class Trainer():
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
                 
-            out, embedding, vad_frame = self.model(mixed, vad)
+            outputs, embedding, vad_frame = self.model(mixed, vad)
             
-            loss = self.learner.train_update(out, speech_azi)
+            loss = self.learner.train_update(outputs, speech_azi)
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame])
+            self.learner.memory_delete([mixed, vad, speech_azi, outputs, loss, embedding, vad_frame])
             
             self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         
@@ -391,7 +405,7 @@ class Trainer():
         
         torch.cuda.empty_cache()
         
-        # with torch.cuda.amp.autocast():
+
         with torch.no_grad():
             
             # mixed : (16, 4, 64000)

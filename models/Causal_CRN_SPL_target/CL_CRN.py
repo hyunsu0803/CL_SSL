@@ -88,7 +88,28 @@ class crn(nn.Module):
         ##############################
         # projection layer
         ##############################
-        self.projection = nn.Linear(config['embedding_size'], config['projection_size'])  # (256, 128)
+        # self.projection = nn.Linear(config['embedding_size'], config['projection_size'])  # (256, 128)
+
+        self.embedding_layer=nn.ModuleList()
+        self.azi_mapping_conv_layer=nn.ModuleList()
+        self.azi_mapping_final=nn.ModuleList()
+        
+
+        args = [256, 256, 1]
+        kwargs['padding']=0
+
+        self.embedding_layer.append(Conv1D_Block(*args, **kwargs))
+        self.embedding_layer.append(Conv1D_Block(*args, **kwargs))
+        self.embedding_layer.append(Conv1D_Block(*args, **kwargs))
+        
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       
+        
+        args[1] = 128
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))      
         
 
     def forward(self, x):
@@ -101,16 +122,27 @@ class crn(nn.Module):
             x=cnn_layer(x)
             x=pooling_layer(x)
         # x: (B, 32, 8)
-        x_flatten = x.view(x.size(0), -1)  # (B, 256)
+        x_flatten = x.view(x.size(0), -1, 1)  # (B, 256, 1)
         embedding = F.normalize(x_flatten, dim=1)
         
         ##############################
-        # projection layer
+        # projection layer - deep supervision ver.
         ##############################
-        x = self.projection(embedding)  # (B, 128)
-        x = F.normalize(x, dim=1)
+        # x = self.projection(embedding)  # (B, 128)
+        # x = F.normalize(x, dim=1)
+
+        outputs=[]
+
+        for cnn_layer, final_layer in zip(self.azi_mapping_conv_layer, self.azi_mapping_final):
+            out = cnn_layer(embedding)
+            out = final_layer(out)
+
+            out = out.squeeze(dim=-1)
+            out = F.normalize(out, dim=-1)
+            outputs.append(out)
+        # output = torch.stack(outputs).permute(1, 0, 2)
         
-        return x, embedding
+        return outputs, embedding
 
 
 
@@ -279,9 +311,9 @@ class main_model_for_scl(nn.Module):
         
         feature, vad_frame = self.compressed_RTF(mixed, vad)    # (B, 2(C-1), F), (B, 1, T)
 
-        out, embedding = self.crn(feature)   # (B, 128), (B, 256)
+        outputs, embedding = self.crn(feature)   # (B, 3, 128), (B, 256)
         
         
-        return out, embedding, vad_frame
+        return outputs, embedding, vad_frame
 
 
