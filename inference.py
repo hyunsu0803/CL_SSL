@@ -113,25 +113,52 @@ class Logger_config():
         
 
     def save_output(self, epoch):
+
+        macro_precision = 0
+        macro_recall = 0
+        sum_TP = 0
+        sum_FP = 0
+        sum_FN = 0
+        for i in range(360):
+            TP = self.save_config_dict['confusion_matrix'][str(i)]['TP']
+            FP = self.save_config_dict['confusion_matrix'][str(i)]['FP']
+            FN = self.save_config_dict['confusion_matrix'][str(i)]['FN']
+
+            sum_TP += TP
+            sum_FP += FP
+            sum_FN += FN
+
+            if TP+FP != 0:
+                precision = TP/(TP+FP)
+                macro_precision += precision
+            if TP+FN != 0:
+                recall = TP/(TP+FN)
+                macro_recall += recall
+
+        macro_precision = macro_precision/360 * 100
+        macro_recall = macro_recall/360 * 100
+        micro_precision = sum_TP/(sum_TP+sum_FP) * 100
+        micro_recall = sum_TP/(sum_TP+sum_FN) * 100
         
         total_error_sum = self.save_config_dict['total_error_sum']
         number_of_degrees = self.save_config_dict['number_of_degrees']
 
         MAE = total_error_sum/number_of_degrees
         acc_180 = self.save_config_dict['acc_180']/number_of_degrees * 100
-        acc_20 = self.save_config_dict['acc_20']/number_of_degrees  * 100
         acc_10 = self.save_config_dict['acc_10']/number_of_degrees  * 100
         acc_5 = self.save_config_dict['acc_5']/number_of_degrees    * 100
-        acc_3 = self.save_config_dict['acc_3']/number_of_degrees    * 100
         acc_1 = self.save_config_dict['acc_1']/number_of_degrees    * 100
 
         print(f"MAE : {MAE:.2f}\n")
         print(f"acc_180 : {acc_180:.2f}\n")
-        print(f"acc_20 : {acc_20:.2f}\n")
         print(f"acc_10 : {acc_10:.2f}\n")
         print(f"acc_5 : {acc_5:.2f}\n")
-        print(f"acc_3 : {acc_3:.2f}\n")
         print(f"acc_1 : {acc_1:.2f}\n")
+
+        print(f"macro_precision : {macro_precision:.2f}\n")
+        print(f"micro_precision : {micro_precision:.2f}\n")
+        print(f"macro_recall : {macro_recall:.2f}\n")
+        print(f"micro_recall : {micro_recall:.2f}\n")
 
         os.makedirs(self.result_folder['inference_folder']+ self.room_type[0], exist_ok=True)
         with open(self.result_folder['inference_folder']+ self.room_type[0]+f'/result_{MAE:.2f}.txt', 'w') as f:
@@ -140,35 +167,50 @@ class Logger_config():
             f.write(str(MAE)+'\n\n')
 
             f.write('\nacc_180\n')
-            f.write(str(acc_180)+'\n')
-            f.write('\nacc_20\n')
-            f.write(str(acc_20)+'\n')
+            f.write(str(acc_180))
             f.write('\nacc_10\n')
-            f.write(str(acc_10)+'\n')
+            f.write(str(acc_10))
             f.write('\nacc_5\n')
-            f.write(str(acc_5)+'\n')
-            f.write('\nacc_3\n')
-            f.write(str(acc_3)+'\n')
+            f.write(str(acc_5))
             f.write('\nacc_1\n')
-            f.write(str(acc_1)+'\n')
+            f.write(str(acc_1))
+
+            f.write('\n\nmacro_precision\n')
+            f.write(str(macro_precision))
+            f.write('\nmicro_precision\n')
+            f.write(str(micro_precision))
+            f.write('\nmacro_recall\n')
+            f.write(str(macro_recall))
+            f.write('\nmicro_recall\n')
+            f.write(str(micro_recall))
 
     
-    def error_update(self, argmax_doa_error):
+    def error_update(self, output_azi, ans_azi):
+
+        error = abs(output_azi - ans_azi)
+        error = min(error, 360-error)
+
+        if error <= 10:
+            self.save_config_dict['confusion_matrix'][str(ans_azi)]['TP'] += 1
+        else:
+            self.save_config_dict['confusion_matrix'][str(ans_azi)]['FN'] += 1
+            self.save_config_dict['confusion_matrix'][str(output_azi)]['FP'] += 1
+
         
-        self.save_config_dict['total_error_sum'] += argmax_doa_error
+        self.save_config_dict['total_error_sum'] += error
         self.save_config_dict['number_of_degrees'] += 1
 
-        if argmax_doa_error <= 180:
+        if error <= 180:
             self.save_config_dict['acc_180'] += 1
-        if argmax_doa_error <= 20:
+        if error <= 20:
             self.save_config_dict['acc_20'] += 1
-        if argmax_doa_error <= 10:
+        if error <= 10:
             self.save_config_dict['acc_10'] += 1
-        if argmax_doa_error <= 5:
+        if error <= 5:
             self.save_config_dict['acc_5'] += 1
-        if argmax_doa_error <= 3:
+        if error <= 3:
             self.save_config_dict['acc_3'] += 1
-        if argmax_doa_error <= 1:
+        if error <= 1:
             self.save_config_dict['acc_1'] += 1
 
   
@@ -185,6 +227,10 @@ class Logger_config():
         self.save_config_dict['total_error_sum']=0
         self.save_config_dict['number_of_degrees']=0
 
+        self.save_config_dict['confusion_matrix']={}
+        for i in range(360):
+            self.save_config_dict['confusion_matrix'][str(i)]={'TP':0, 'FP':0, 'FN':0}
+
         return self.args
 
    
@@ -195,7 +241,6 @@ class Dataloader_config():
     
     def config(self):
         self.test_loader=Synth_dataload(self.args['dataloader']['test']['loader'])
-        # self.test_loader=Real_dataload(self.args['dataloader']['test']['loader'])
        
         return self.args
     
@@ -248,7 +293,7 @@ class Tester():
                     speech_azi=speech_azi.to(self.hyperparameter.device)
     
 
-                    out, target=self.model(mixed, vad, speech_azi, iter_num, epoch=0)
+                    out, target=self.model(mixed, vad, speech_azi, iter_num, epoch)
 
                     out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot                    
                     target=target.cpu().numpy()                 # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot
@@ -260,8 +305,6 @@ class Tester():
                     output_azi = out[0,2].argmax()
                     ans_azi = speech_azi[0,0]
                     
-                    error = abs(output_azi - ans_azi)
-                    error = min(error, 360-error)
                     
                     # pkl_idx=pkl_idx[0]
                     pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
@@ -310,7 +353,7 @@ class Tester():
                     # plt.savefig('/root/mydir/results/spectrograms/' + pkl_idx.split('.')[0]+ '.png')
                     # plt.close()
 
-                    self.logger.error_update(error)
+                    self.logger.error_update(output_azi, ans_azi)
                     
                     self.learner.memory_delete([mixed, vad, speech_azi, out, target,])
                   
@@ -325,12 +368,13 @@ class Tester():
 if __name__=='__main__':
     args=sys.argv[1:]
 
-    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model_doa.yaml', 
-            'model_scl /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model_scl.yaml',
-            'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
-            'hyparam /root/clssl/SSL_src/hyparam/test.yaml', 
-            'learner /root/clssl/SSL_src/hyparam/learner.yaml', 
-            'logger /root/clssl/SSL_src/hyparam/logger.yaml']
+
+    args = ['model ./SSL_src/models/Causal_CRN_SPL_target/model_doa.yaml', 
+            'model_scl ./SSL_src/models/Causal_CRN_SPL_target/model_scl.yaml',
+            'dataloader ./SSL_src/dataloader/data_loader.yaml', 
+            'hyparam ./SSL_src/hyparam/test.yaml', 
+            'learner ./SSL_src/hyparam/learner.yaml', 
+            'logger ./SSL_src/hyparam/logger.yaml']
     args=util.util.get_yaml_args(args)    
     
     t=Tester(args)

@@ -306,11 +306,11 @@ class Dataloader_config():
         
     def config(self):
 
-        self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 16
-        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 8
+        self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 32
+        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 16
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
         self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 0
-        self.args['dataloader']['val']['loader']['pkl_dir'] = '/root/clssl/SSL_src/prepared/pkl/doa/'
+        self.args['dataloader']['val']['loader']['pkl_dir'] = '/root/hyunsoo/clssl/SSL_src/prepared/pkl/doa/'
         
         self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
         self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])
@@ -413,12 +413,12 @@ class Trainer():
 if __name__=='__main__':
     args=sys.argv[1:]
     
-    args = ['model /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model_doa.yaml', 
-            'model_scl /root/clssl/SSL_src/models/Causal_CRN_SPL_target/model_scl.yaml',
-            'dataloader /root/clssl/SSL_src/dataloader/data_loader.yaml', 
-            'hyparam /root/clssl/SSL_src/hyparam/train.yaml', 
-            'learner /root/clssl/SSL_src/hyparam/learner.yaml', 
-            'logger /root/clssl/SSL_src/hyparam/logger.yaml']
+    args = ['model ./SSL_src/models/Causal_CRN_SPL_target/model_doa.yaml', 
+            'model_scl ./SSL_src/models/Causal_CRN_SPL_target/model_scl.yaml',
+            'dataloader ./SSL_src/dataloader/data_loader.yaml', 
+            'hyparam ./SSL_src/hyparam/train.yaml', 
+            'learner ./SSL_src/hyparam/learner.yaml', 
+            'logger ./SSL_src/hyparam/logger.yaml']
     
     args=util.util.get_yaml_args(args)
     t=Trainer(args)

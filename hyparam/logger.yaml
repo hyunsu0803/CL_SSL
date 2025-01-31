@@ -1,5 +1,5 @@
 wandb:
-  wandb_ok: True
+  wandb_ok: False
   init:
     project: cl_ssl
     entity: 
@@ -13,9 +13,7 @@ wandb:
     
 optimize_method: 'min'
 
-save_csv: /root/clssl/results/logger/log.csv
-png_dir: /root/clssl/results/logger/loss.png
+save_csv: ./results/logger/log.csv
+png_dir: ./results/logger/loss.png
 
-model_save_dir: /root/clssl/results/model_checkpoint/
-# out_txt:
-#   dir: /root/clssl/results/logger/exp.txt
+model_save_dir: ./results/model_checkpoint/

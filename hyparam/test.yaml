@@ -8,16 +8,16 @@ acc_threshold: 5
 local_maximum_distance: 30
 
 SCL: False
-trained_scl_model_path: /root/clssl/results_scl_221628/model_checkpoint/best_model.tar   # for scl
+trained_scl_model_path: ./results_scl_221628/model_checkpoint/best_model.tar   # for scl
 
-model: /root/clssl/results/model_checkpoint/best_model.tar
+model: ./results/model_checkpoint/best_model.tar
 
 result_folder: 
   room_type: ['evaluation']
 
-  inference_folder: '/root/clssl/results/'
+  inference_folder: './results/'
   
 
 
 GPGPU:
-  device_ids: [0]
+  device_ids: [0, 1, 2, 3]

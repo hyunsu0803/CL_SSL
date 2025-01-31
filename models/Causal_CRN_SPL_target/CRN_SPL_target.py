@@ -187,10 +187,8 @@ class main_model_for_doa(nn.Module):
         
         self.scl_model=model_dir.get_model_for_scl(self.config_scl)#.to(self.device)
 
-        trained=torch.load(self.trained_scl_model_path)#, map_location=self.device)     
+        trained=torch.load(self.trained_scl_model_path)#, map_location=self.device) 
         self.scl_model.load_state_dict(trained['model_state_dict'], )                       
-        self.scl_model=torch.nn.DataParallel(self.scl_model, self.hyparam['GPGPU']['device_ids'])       
-        # self.scl_model.eval()
         self.scl_model.train()
         
 
@@ -233,7 +231,7 @@ class main_model_for_doa(nn.Module):
                     self.epoch_count+=1
                 
                 if self.epoch_count==self.config['epoch']['update_period']:
-                    print('sigma_epoch update')
+                    # print('sigma_epoch update')
                     update()
                     self.epoch_count=0
                     return 
