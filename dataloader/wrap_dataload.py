@@ -61,8 +61,3 @@ def Speech_datamake_for_doa(args):
                                             **args['dataloader_dict']
                                             )
 
-# def Gunshot_datamake(args):
-#     return DataLoader(gunshot_data_maker(args),
-#                                             pin_memory=True,
-#                                             **args['dataloader_dict']
-#                                             )
