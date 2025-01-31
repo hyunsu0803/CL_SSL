@@ -201,9 +201,9 @@ class Logger_config():
         self.csv['test_epoch_loss']=[]
         self.csv['test_best_loss']=[]
 
-        self.csv_dir=self.args['logger']['save_csv'].replace('result', 'result_only_doa')
-        self.model_save_dir=self.args['logger']['model_save_dir'].replace('result', 'result_only_doa')
-        self.png_dir=self.args['logger']['png_dir'].replace('result', 'result_only_doa')
+        self.csv_dir=self.args['logger']['save_csv']#.replace('result', 'result_only_doa')
+        self.model_save_dir=self.args['logger']['model_save_dir']#.replace('result', 'result_only_doa')
+        self.png_dir=self.args['logger']['png_dir']#.replace('result', 'result_only_doa')
 
         if self.args['logger']['optimize_method']=='min':
             self.best_test_loss=math.inf
@@ -362,8 +362,7 @@ class Trainer():
 
         
         for iter_num, (mixed, vad, speech_azi, speech_ele, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
-            
-            
+                
             mixed=mixed.to(self.hyperparameter.device)
             vad=vad.to(self.hyperparameter.device)
             speech_azi=speech_azi.to(self.hyperparameter.device)
@@ -375,7 +374,7 @@ class Trainer():
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target])
+            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, _, out, loss, target])
             
         
         
