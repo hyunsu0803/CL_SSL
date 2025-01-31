@@ -39,7 +39,8 @@ def _clean_gunshot_locations(location_str):
 
 
 def make_speech_vad(vad_tool, wav_folder, vad_folder):
-    key_list = ['train-clean-100']
+    # key_list = ['train-clean-100']
+    key_list = ['test-clean']
 
     for key in key_list:
         print("check 1", key)
@@ -51,7 +52,7 @@ def make_speech_vad(vad_tool, wav_folder, vad_folder):
             
         for audio_name in tqdm(pathlib.Path(data_dir).rglob('*.flac')):
             audio_name=str(audio_name)
-            print(audio_name)
+            # print(audio_name)
             
             audio_file, fs= sf.read(audio_name)
             s_clean, vad_out=_cleanSilences(audio_file, vad_tool, fs, 3, return_vad=True)
@@ -189,19 +190,17 @@ if __name__=='__main__':
     vad_tool=webrtcvad.Vad()
 
     wav_folder=dict()
-    wav_folder['train-clean-100'] = "/root/mydir/LibriSpeech/train-clean-100/"
-    wav_folder['The_Terror_Live'] = '/root/mydir/miyungpa/speech/'
-    wav_folder['gunshot_online'] = '/root/mydir/miyungpa/gunshot_online/edge-collected-gunshot-audio/'
+    wav_folder['train-clean-100'] = "/root/clssl/LibriSpeech/train-clean-100/"
+    wav_folder['test-clean'] = "/root/clssl/LibriSpeech/test-clean/"
     
 
     vad_folder=dict()
-    vad_folder['train-clean-100'] = "/root/mydir/SSL_src/prepared/vad/train/"
-    vad_folder['The_Terror_Live'] = '/root/mydir/miyungpa/prepared/vad/'
-    vad_folder['gunshot_online'] = '/root/mydir/miyungpa/prepared/vad/gunshot/'
+    vad_folder['train-clean-100'] = "/root/clssl/SSL_src/prepared/vad/train/"
+    vad_folder['test-clean'] = "/root/clssl/SSL_src/prepared/vad/test/"
     
     
-    # make_speech_vad(vad_tool, wav_folder, vad_folder)
+    make_speech_vad(vad_tool, wav_folder, vad_folder)
     # make_online_gunshot_vad(vad_tool, wav_folder, vad_folder)
-    make_real_gunshot_vad(vad_tool, wav_folder, vad_folder)
+    # make_real_gunshot_vad(vad_tool, wav_folder, vad_folder)
     
     
