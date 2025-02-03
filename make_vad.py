@@ -1,10 +1,12 @@
 import webrtcvad
+import pathlib
+from tqdm import tqdm
 import soundfile as sf
 import numpy as np
+import os 
 import pandas as pd
+from glob import glob
 import ast
-import os
-import tqdm
 
 
 def _cleanSilences(s, vad_tool, fs, aggressiveness, return_vad=False):
@@ -22,7 +24,6 @@ def _cleanSilences(s, vad_tool, fs, aggressiveness, return_vad=False):
     
     return (s_clean, vad_out) if return_vad else s_clean
 
-
 def _clean_gunshot_locations(location_str):
     try:
         # Remove extra commas and spaces
@@ -36,58 +37,52 @@ def _clean_gunshot_locations(location_str):
         return []
 
 
-def make_online_gunshot_vad():
 
-    audio_dir='/root/mydir/miyungpa/gunshot_real_old/'
-    vad_dir='/root/mydir/miyungpa/prepared/vad/gunshot_real_old_111/'
-    
-    
-    df = pd.read_csv('/root/mydir/miyungpa/metadata/gunshot_real_whole_labeled.csv', header=0)
-    df.columns = df.columns.str.strip()
-    
-    for idx, data_row in df.iterrows():
-        # print(idx)
-        audio_name = data_row['filename']
-        audio_path = audio_dir + audio_name
-        # print("######", audio_name)
+def make_speech_vad(vad_tool, wav_folder, vad_folder):
+    # key_list = ['train-clean-100']
+    key_list = ['test-clean']
 
-        num_gunshots = data_row['num_gunshots']
-        
-        gunshot_locations = []
-        for n in range(num_gunshots):
-            if 3+n < 10:
-                gunshot_locations.append(data_row.iloc[3+n])
+    for key in key_list:
 
-        
-        audio_file, fs= sf.read(audio_path)
-        # print(audio_file.shape)   :    (165375, )
-        
-        vad_out = np.ones_like(audio_file)
-        # for t in gunshot_locations:
-        #     bang = t * fs
-        #     start = max(0, round(bang - 0.1*fs))
-        #     end = min(len(vad_out), round(bang + 0.4*fs))
-        #     vad_out[start:end] = 1
+        vad_dir=vad_folder[key]
+        data_dir=wav_folder[key]
+        print("vad dir", vad_dir)
+        print("data dir", data_dir)
+
             
-        vad_name=audio_path.replace('.wav', '.npy')
-        vad_name=vad_name.replace(audio_dir, vad_dir)
-        
-      
-        os.makedirs(os.path.dirname(vad_name), exist_ok=True)
-        
-        np.save(vad_name, vad_out)
-     
-       
-# def make_real_gunshot_vad -> wevrtcvad.py
+        for audio_name in tqdm(pathlib.Path(data_dir).rglob('*.flac')):
+            audio_name=str(audio_name)
+            
+            audio_file, fs= sf.read(audio_name)
+            s_clean, vad_out=_cleanSilences(audio_file, vad_tool, fs, 3, return_vad=True)
 
-    
-    
+            if np.count_nonzero(s_clean) < len(audio_file) * 0.66:
+                s_clean, vad_out = _cleanSilences(audio_file, vad_tool, fs, 2, return_vad=True)
+            if np.count_nonzero(s_clean) < len(audio_file) * 0.66:
+                s_clean, vad_out = _cleanSilences(audio_file, vad_tool, fs, 1, return_vad=True)
+
+                
+            vad_out=vad_out.astype(bool)
+
+            vad_name=audio_name.replace('.flac', '.npy')
+            vad_name=vad_name.replace(data_dir, vad_dir)
+            os.makedirs(os.path.dirname(vad_name), exist_ok=True)
+            
+            np.save(vad_name, vad_out)    
+        
+            
 if __name__=='__main__':
     
     vad_tool=webrtcvad.Vad()
 
     wav_folder=dict()
-    wav_folder['train-clean-100'] = "/root/mydir/LibriSpeech/train-clean-100/"
-    wav_folder['The_Terror_Live'] = '/root/mydir/miyungpa/speech/'
+    wav_folder['train-clean-100'] = "/root/clssl/LibriSpeech/train-clean-100/"
+    wav_folder['test-clean'] = "/root/clssl/LibriSpeech/test-clean/"
     
-    make_online_gunshot_vad()
+
+    vad_folder=dict()
+    vad_folder['train-clean-100'] = "/root/clssl/SSL_src/prepared/vad/train/"
+    vad_folder['test-clean'] = "/root/clssl/SSL_src/prepared/vad/test/"
+    
+    
+    make_speech_vad(vad_tool, wav_folder, vad_folder)
