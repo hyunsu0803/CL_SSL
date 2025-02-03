@@ -5,21 +5,7 @@ import numpy as np
 import random
 import importlib
 from tqdm import tqdm
-from dataloader.wrap_dataload import Synth_dataload, Real_dataload
-import matplotlib.pyplot as plt
-import metric
-import soundfile as sf
-from scipy.signal import spectrogram, resample
-
-from matplotlib.cm import ScalarMappable
-from matplotlib.colors import Normalize
-from matplotlib.patches import Circle
-
-from multiprocessing import Pool
-import tempfile
-import imageio
-from PIL import Image
-from io import BytesIO
+from dataloader.wrap_dataload import Synth_dataload
 
 
 class Hyparam_set():

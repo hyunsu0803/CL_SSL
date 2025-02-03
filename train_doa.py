@@ -310,7 +310,7 @@ class Dataloader_config():
         self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 16
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
         self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 0
-        self.args['dataloader']['val']['loader']['pkl_dir'] = '/root/hyunsoo/clssl/SSL_src/prepared/pkl/doa/'
+        self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/doa/'
         
         self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
         self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])

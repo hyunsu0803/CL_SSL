@@ -138,7 +138,7 @@ class crn(nn.Module):
             out = final_layer(out)
 
             out = out.squeeze(dim=-1)
-            out = F.normalize(out, dim=-1)
+            out = F.normalize(out, dim=-1)  # (B, 128)
             outputs.append(out)
         # output = torch.stack(outputs).permute(1, 0, 2)
         
@@ -311,9 +311,9 @@ class main_model_for_scl(nn.Module):
         
         feature, vad_frame = self.compressed_RTF(mixed, vad)    # (B, 2(C-1), F), (B, 1, T)
 
-        outputs, embedding = self.crn(feature)   # (B, 3, 128), (B, 256)
+        outputs, embedding = self.crn(feature)   # 3 * (B, 128), (B, 256)
         
         
-        return outputs, embedding, vad_frame
+        return outputs, embedding.squeeze(dim=-1), vad_frame
 
 
