@@ -4,9 +4,6 @@ from tqdm import tqdm
 import soundfile as sf
 import numpy as np
 import os 
-import pandas as pd
-from glob import glob
-import ast
 
 
 def _cleanSilences(s, vad_tool, fs, aggressiveness, return_vad=False):
@@ -24,23 +21,10 @@ def _cleanSilences(s, vad_tool, fs, aggressiveness, return_vad=False):
     
     return (s_clean, vad_out) if return_vad else s_clean
 
-def _clean_gunshot_locations(location_str):
-    try:
-        # Remove extra commas and spaces
-        cleaned_str = location_str.replace(' ', ',').replace(',,', ',')
-        # Remove leading and trailing commas
-        cleaned_str = cleaned_str.strip(',')
-        # Convert to list
-        return ast.literal_eval(cleaned_str)
-    except (SyntaxError, ValueError):
-        # Handle invalid entries
-        return []
-
-
 
 def make_speech_vad(vad_tool, wav_folder, vad_folder):
-    # key_list = ['train-clean-100']
-    key_list = ['test-clean']
+    key_list = ['train-clean-100']
+    # key_list = ['test-clean']
 
     for key in key_list:
 
@@ -81,8 +65,8 @@ if __name__=='__main__':
     
 
     vad_folder=dict()
-    vad_folder['train-clean-100'] = "/root/clssl/SSL_src/prepared/vad/train/"
-    vad_folder['test-clean'] = "/root/clssl/SSL_src/prepared/vad/test/"
+    vad_folder['train-clean-100'] = "/root/clssl/SSL_src/prepared/vad/train-clean-100/"
+    vad_folder['test-clean'] = "/root/clssl/SSL_src/prepared/vad/test-clean/"
     
     
     make_speech_vad(vad_tool, wav_folder, vad_folder)

@@ -50,8 +50,8 @@ class Dataloader_config():
         self.args=args
         
     def config(self):
-        # self.val_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
-        self.val_maker = Speech_datamake_for_scl(self.args['dataloader']['val']['maker'])
+        self.doa_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
+        self.scl_maker = Speech_datamake_for_scl(self.args['dataloader']['val']['maker'])
         # self.test_maker = Gunshot_datamake(self.args['dataloader']['test']['maker'])
       
         return self.args   
@@ -72,10 +72,10 @@ class Trainer():
     
     def run(self, ):
         
-        for i in range(10):
-            self.validation_for_scl(0)
+        # for i in range(10):
+        #     self.validation_for_scl(0)
         
-        # self.validation_for_doa(0)
+        self.validation_for_doa(0)
         # self.test(0)
         
 
@@ -83,15 +83,15 @@ class Trainer():
 
         with torch.no_grad():
             n_room = 8
-            self.dataloader.val_maker.dataset.random_room_speech_select(n_room)
-            for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.val_maker , desc='Test', total=len(self.dataloader.val_maker), )):
-                self.dataloader.val_maker.dataset.random_room_speech_select(n_room)
+            self.dataloader.scl_maker.dataset.random_room_speech_select(n_room)
+            for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.scl_maker , desc='Test', total=len(self.dataloader.scl_maker), )):
+                self.dataloader.scl_maker.dataset.random_room_speech_select(n_room)
                 
     
     def validation_for_doa(self, epoch):
             
             with torch.no_grad():
-                for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.val_maker , desc='Test', total=len(self.dataloader.val_maker), )):
+                for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.doa_maker , desc='Test', total=len(self.dataloader.doa_maker), )):
                     continue
 
 

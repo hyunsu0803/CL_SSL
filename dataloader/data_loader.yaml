@@ -1,10 +1,10 @@
 train:
 
-  noise_dir: /root/hyunsoo/MS-SNSD/
-  metadata_dir: /root/hyunsoo/clssl/SSL_src/metadata/
+  noise_dir: ./MS-SNSD/
+  metadata_dir: ./SSL_src/metadata/
 
-  speech_dir: /root/hyunsoo/LibriSpeech/train-clean-100/
-  vad_dir: /root/hyunsoo/clssl/SSL_src/prepared/vad/train-clean-100/
+  speech_dir: ./LibriSpeech/train-clean-100/
+  vad_dir: ./SSL_src/prepared/vad/train-clean-100/
   
   speech_csv: train_librispeech.csv
   noise_csv: train_noise.csv

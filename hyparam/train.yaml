@@ -6,9 +6,9 @@ last_epoch: 400
 resume_epoch: 0
 
 GPGPU:
-  device_ids: [0, 1, 2, 3]
+  device_ids: [0]
 
 model: ./results_-10+10_scl+doa_50+40/model_checkpoint/best_model.tar  # only for fine-tuning
 
 SCL: True
-trained_scl_model_path: ./results_02021344_scl/model_checkpoint/best_model.tar   # for scl
+trained_scl_model_path: ./results_251033_scl/model_checkpoint/best_model.tar   # for scl
