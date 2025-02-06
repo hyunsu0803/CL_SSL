@@ -108,7 +108,7 @@ val:
     dataloader_dict:
       batch_size: 1 
       shuffle: True
-      num_workers: 0
+      num_workers: 1
       drop_last: True
 
     mic_type: tetra 
@@ -170,7 +170,7 @@ test:
     dataloader_dict:
       batch_size: 1
       shuffle: False
-      num_workers: 0
+      num_workers: 1
       drop_last: True
 
     mic_type: tetra 
@@ -204,7 +204,7 @@ test:
     dataloader_dict:        # essential for real DataLoader
       batch_size: 1 
       shuffle: False
-      num_workers: 0 
+      num_workers: 1 
       drop_last: True
 
     mic_type: tetra 

@@ -60,27 +60,20 @@ class Learner_config():
             del a
 
     def model_select(self):
-        model_name=self.args['model']['name']
-        model_import='models.'+model_name+'.main'       # ./models/Causal_CRN~~/main.py
 
+        model_name=self.args['model']['name']
+        model_import='models.'+model_name+'.main'       
         
         model_dir=importlib.import_module(model_import)
         
         self.model=model_dir.get_model_for_scl(self.args['model']).to(self.device)
+
+        if self.args['hyparam']['finetune']:
+            trained=torch.load(self.args['hyparam']['model_for_finetune'], map_location=self.device)     
+            self.model.load_state_dict(trained['model_state_dict'], )                
+
         self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])   
         
-    def model_select_for_finetune(self):
-        model_name=self.args['model']['name']
-        model_import='models.'+model_name+'.main'
-
-        model_dir=importlib.import_module(model_import)
-        
-        self.model=model_dir.get_model_for_scl(self.args['model']).to(self.device)
-
-        trained=torch.load(self.args['hyparam']['model'], map_location=self.device)     # only for infer
-        self.model.load_state_dict(trained['model_state_dict'], )                       # only for infer
-        self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])       
-
 
     def init_optimizer(self):
 
@@ -138,7 +131,7 @@ class Learner_config():
 
             losses.append(loss_mean)
 
-        # loss_mean = torch.stack(losses)
+
         loss_mean = sum(losses) / len(losses)
             
         loss_mean.backward()
@@ -166,7 +159,7 @@ class Learner_config():
 
             losses.append(loss_mean)
 
-        # loss_mean = torch.stack(losses)
+
         loss_mean = sum(losses) / len(losses)
 
         return loss_mean
@@ -175,7 +168,6 @@ class Learner_config():
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
         self.model_select()     # set self.model
-        # self.model_select_for_finetune()
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()
@@ -386,13 +378,13 @@ class Trainer():
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
                 
-            outputs, embedding, vad_frame = self.model(mixed, vad)
+            outputs, embedding, vad_frame, c_rtf = self.model(mixed, vad)
             
             loss = self.learner.train_update(outputs, speech_azi)
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, outputs, loss, embedding, vad_frame])
+            self.learner.memory_delete([mixed, vad, speech_azi, outputs, loss, embedding, vad_frame, c_rtf])
             
             self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         
@@ -421,13 +413,13 @@ class Trainer():
 
                 
                 
-                out, embedding, vad_frame = self.model(mixed, vad)
+                out, embedding, vad_frame, c_rtf = self.model(mixed, vad)
                 
                 loss=self.learner.test_update(out, speech_azi)
                     
                     
                 self.logger.test_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame])
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame, c_rtf])
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
             

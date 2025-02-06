@@ -282,4 +282,4 @@ class main_model_for_scl(nn.Module):
         out, embedding = self.crn(feature)   # (B, 128), (B, 256)
         
         
-        return out, embedding, vad_frame
+        return out, embedding, vad_frame, feature

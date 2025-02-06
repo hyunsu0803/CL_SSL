@@ -140,12 +140,12 @@ class main_model_for_doa(nn.Module):
         self.config=config
         self.config_scl=config_scl
         self.hyparam=hyparam
-        if self.hyparam is not None:
-            self.use_scl=self.hyparam['SCL']
-            self.config['CRN']['input_mapping_dim'] = 1024
-        else:
-            self.use_scl=False
-            self.config['CRN']['input_mapping_dim'] = 512
+
+
+        self.use_scl=self.hyparam['SCL']
+        self.finetune=self.hyparam['finetune']
+        self.config['CRN']['input_mapping_dim'] = 1024
+
         
         self.eps=np.finfo(np.float32).eps
         self.ref_ch=self.config['ref_ch']
@@ -165,7 +165,6 @@ class main_model_for_doa(nn.Module):
 
         ######
        
-        # self.max_spk=self.config['max_spk']
         self.degree_resolution = self.config['degree_resolution']
         self.azi_size=360//self.degree_resolution
 
@@ -173,9 +172,7 @@ class main_model_for_doa(nn.Module):
         
         self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
         
-        if self.use_scl:
-            self.trained_scl_model_path = self.hyparam['trained_scl_model_path']
-            self.model_select_for_scl_feature()     # self.scl_model
+        self.model_select_for_scl_feature()     # self.scl_model
        
     
 
@@ -185,58 +182,17 @@ class main_model_for_doa(nn.Module):
 
         model_dir=importlib.import_module(model_import)
         
-        self.scl_model=model_dir.get_model_for_scl(self.config_scl)#.to(self.device)
+        self.scl_model=model_dir.get_model_for_scl(self.config_scl)
 
-        trained=torch.load(self.trained_scl_model_path)#, map_location=self.device) 
-        self.scl_model.load_state_dict(trained['model_state_dict'], )                       
+        if self.use_scl and not self.finetune:
+
+            self.trained_scl_model_path = self.hyparam['trained_scl_model_path']
+            trained=torch.load(self.trained_scl_model_path) 
+            self.scl_model.load_state_dict(trained['model_state_dict'], )   
+
         self.scl_model.train()
         
 
-    def sigma_update(self, iter_num, epoch):
-        if iter_num%500==0:
-                # print(self.sigma)
-                pass
-        if epoch<self.config['wait_epoch']:
-            return
-        def update():
-            
-
-            if self.sigma_update_method=='add':
-                self.sigma+=self.sigma_rate
-            elif self.sigma_update_method=='multiply':
-                self.sigma*=self.sigma_rate
-            else:
-                "Not exist!!!"
-                exit()
-
-            self.sigma=torch.clamp(self.sigma, self.sigma_min, self.sigma_max)
-
-       
-        if self.training:
-
-            if self.config['iter']['update']:
-                if self.iteration_count!=self.config['iter']['update_period']:
-                    self.iteration_count+=1
-                
-                else:
-                    print('sigma_iter update')
-                    update()
-                    self.iteration_count=0
-                    return
-            
-            if self.config['epoch']['update']:
-
-                if self.now_epoch!=epoch:
-                    self.now_epoch=epoch
-                    self.epoch_count+=1
-                
-                if self.epoch_count==self.config['epoch']['update_period']:
-                    # print('sigma_epoch update')
-                    update()
-                    self.epoch_count=0
-                    return 
-
-    
     def make_target(self, vad_frame, azi, iter_num, epoch):
         
         azi_target=torch.div(azi, 360//self.azi_size, rounding_mode='floor').long()        
@@ -264,73 +220,8 @@ class main_model_for_doa(nn.Module):
     
         vad_frame=torch.max(vad_frame, dim=2).values
        
-        self.sigma_update(iter_num, epoch)
-       
         return vad_frame # batch, sigma_num, degree, frame
-    
 
-    def irtf_feature(self, mixed, vad):  
-        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
-        # B x C x F x T = (B, 4, 513, 345)
-        comp = torch.complex(r, i)
-        # comp = comp[:, :, :26, :]
-        # print("comp.shape", comp.shape)
-        # exit()
-        
-        comp_ref = comp[..., [self.ref_ch], :, :]
-        comp_ref = torch.complex(
-            comp_ref.real.clamp(self.eps), comp_ref.imag.clamp(self.eps)
-        )
-
-        comp=torch.cat(
-        (comp[..., self.ref_ch-1:self.ref_ch, :, :], comp[..., self.ref_ch+1:, :, :]),
-        dim=-3) / comp_ref
-        feature=torch.cat((comp.real, comp.imag), dim=1)
-        
-        
-        # (B, 2*(C-1), F, T), (B, F, T)
-        # (B, 6, 129, 501)
-        return feature, vad_frame
-    
-    
-    def _get_mel_spectrogram(self, linear_spectra):
-        
-        self.nb_mel_bins = 64
-        self.n_fft =256
-        self.mel_wts = torch.tensor(librosa.filters.mel(sr=16000, n_fft=self.n_fft, n_mels=self.nb_mel_bins).T, device='cuda', dtype=torch.float32)
-        
-        
-        B, T, F, C = linear_spectra.shape
-        mel_feat = torch.zeros((B, T, self.nb_mel_bins, C), device='cuda')
-
-        for ch in range(C):
-            mag_spectra = torch.abs(linear_spectra[:, :, :, ch]) ** 2  # (B, T, F)
-            mel_spectra = torch.matmul(mag_spectra, self.mel_wts)  # (B, T, nb_mel_bins)
-            log_mel_spectra = torch.log10(torch.clamp(mel_spectra, min=1e-10)) * 10  # librosa power_to_db equivalent
-            mel_feat[:, :, :, ch] = log_mel_spectra     # (B, T, nb_mel_bins, C)
-
-        mel_feat = mel_feat.permute(0, 3, 2, 1)         # (B, C, nb_mel_bins, T)
-        return mel_feat     
-    
-    
-    def _get_gcc(self, linear_spectra):     # T x F x C       
-        
-        
-        B, T, F, C = linear_spectra.shape
-        gcc_channels = (C * (C - 1)) // 2
-        gcc_feat = torch.zeros((B, T, self.nb_mel_bins, gcc_channels), device='cuda')
-
-        cnt = 0
-        for m in range(C):
-            for n in range(m + 1, C):
-                R = torch.conj(linear_spectra[:, :, :, m]) * linear_spectra[:, :, :, n]  # (B, T, F)
-                cc = torch.fft.irfft(torch.exp(1j * torch.angle(R)), n=self.n_fft)  # (B, T, n_fft)
-                cc = torch.cat([cc[:, :, -self.nb_mel_bins // 2:], cc[:, :, :self.nb_mel_bins // 2]], dim=-1)  # Wrap GCC
-                gcc_feat[:, :, :, cnt] = cc         # (B, T, nb_mel_bins, 6)
-                cnt += 1
-
-        gcc_feat = gcc_feat.permute(0, 3, 2, 1)     # (B, 6, nb_mel_bins, T)
-        return gcc_feat     
     
     def compressed_RTF(self, mixed, vad):
         
@@ -358,56 +249,17 @@ class main_model_for_doa(nn.Module):
 
         return c_rtf, vad_frame
 
-
-    def vad_framing(self, vad_batch):
-
-        vad_output_th = vad_batch.mean(axis=2) > 2 / 3
-        
-        vad_output_th = vad_output_th[:, np.newaxis, :, np.newaxis, np.newaxis]
-        vad_output_th = torch.from_numpy(vad_output_th.astype(float)).to(maps.device)
-        repeat_factor = np.array(maps.shape)
-        repeat_factor[:-2] = 1
-        maps *= vad_output_th.float().repeat(repeat_factor.tolist())
-
-    
-    def target_flip(self, target):
-
-  
-
-        target_flipped=torch.flip(target, dims=[2])
-        target_flipped=torch.roll(target_flipped, dims=2, shifts=1)
-        target_cat=torch.stack([target_flipped, target], dim=0)
-        target=torch.max(target_cat, dim=0).values
-
- 
-        return target
-
         
     def forward(self, mixed, vad, azi, iter_num, epoch, LOCATA=False):
 
-        if self.use_scl:
-            # with torch.no_grad():
-            _, feature, vad_frame = self.scl_model(mixed, vad)         # (B, 256)
-            feature = feature.unsqueeze(dim=1)                # (B, 1, 256)
-        else:  
-            feature, vad_frame = self.compressed_RTF(mixed, vad)
-            
+        z, feature, vad_frame, c_rtf = self.scl_model(mixed, vad)
+        feature = feature.unsqueeze(dim=1)                # (B, 1, 256)
         
         out=self.crn(feature)   # (B, 3, 360)
-        
-        if LOCATA:
-            target=self.stft_model.azimuth_strided(vad_frame, azi).unsqueeze(0)
-            azi=azi[...,0]
-      
-            vad_target_pic=self.make_target( vad_frame, azi, iter_num, epoch)
-           
 
-            return out, target, vad_frame,vad_target_pic
-            
-        else:
-            target=self.make_target( vad_frame, azi, iter_num, epoch)
-            target, _ = torch.max(target, dim=3)   # (B, 3, 360)
-        
+
+        target=self.make_target( vad_frame, azi, iter_num, epoch)
+        target, z = torch.max(target, dim=3)   # (B, 3, 360)
         
         return out, target
 

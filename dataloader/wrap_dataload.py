@@ -22,6 +22,7 @@ def Train_dataload_for_scl(args, init_seed):
                                             pin_memory=True,
                                             worker_init_fn=seed_worker,
                                             generator=g,
+                                            persistent_workers=True,
                                             **args['dataloader_dict']
                                             )
     
@@ -39,6 +40,7 @@ def Train_dataload_for_doa(args, init_seed):
 def Synth_dataload(args):
     return DataLoader(synth_data_loader(args),
                                             pin_memory=True,
+                                            persistent_workers=True,
                                             **args['dataloader_dict']
                                             )
 def Real_dataload(args):

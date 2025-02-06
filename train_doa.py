@@ -59,38 +59,21 @@ class Learner_config():
         for a in args:
             del a
 
+        
     def model_select(self):
-        model_name=self.args['model']['name']
-        model_import='models.'+model_name+'.main'       # ./models/Causal_CRN~~/main.py
 
-        
-        model_dir=importlib.import_module(model_import)
-        
-        if self.args['hyparam']['SCL']:
-            self.args['model']['CRN']['input_cnn_channel'] = 1
-            self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
-            
-        else:
-            self.args['model']['CRN']['input_cnn_channel'] = 6
-            self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
-        self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])   
-        
-    def model_select_for_finetune(self):
         model_name=self.args['model']['name']
         model_import='models.'+model_name+'.main'
 
         model_dir=importlib.import_module(model_import)
         
-        if self.args['hyparam']['SCL']:
-            self.args['model']['CRN']['input_cnn_channel'] = 1
-            self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
-            
-        else:
-            self.args['model']['CRN']['input_cnn_channel'] = 6
-            self.model=model_dir.get_model_for_doa(self.args['model']).to(self.device)
+        self.args['model']['CRN']['input_cnn_channel'] = 1
+        self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
 
-        trained=torch.load(self.args['hyparam']['model'], map_location=self.device)     # only for infer
-        self.model.load_state_dict(trained['model_state_dict'], )                       # only for infer
+        if self.args['hyparam']['finetune']:
+            trained=torch.load(self.args['hyparam']['model_for_finetune'], map_location=self.device)     
+            self.model.load_state_dict(trained['model_state_dict'], )                
+
         self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])       
 
 
@@ -185,7 +168,6 @@ class Learner_config():
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
         self.model_select()     # set self.model
-        # self.model_select_for_finetune()
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()
@@ -201,9 +183,9 @@ class Logger_config():
         self.csv['test_epoch_loss']=[]
         self.csv['test_best_loss']=[]
 
-        self.csv_dir=self.args['logger']['save_csv']#.replace('result', 'result_only_doa')
-        self.model_save_dir=self.args['logger']['model_save_dir']#.replace('result', 'result_only_doa')
-        self.png_dir=self.args['logger']['png_dir']#.replace('result', 'result_only_doa')
+        self.csv_dir=self.args['logger']['save_csv']
+        self.model_save_dir=self.args['logger']['model_save_dir']
+        self.png_dir=self.args['logger']['png_dir']
 
         if self.args['logger']['optimize_method']=='min':
             self.best_test_loss=math.inf
@@ -309,7 +291,7 @@ class Dataloader_config():
         self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 32
         self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 16
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
-        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 0
+        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 1
         self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/doa/'
         
         self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
