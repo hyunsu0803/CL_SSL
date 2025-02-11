@@ -267,7 +267,7 @@ class Logger_config():
             os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
             torch.save(checkpoint, self.model_save_dir + "best_model.tar")
             print("new best model\n")
-        torch.save(checkpoint,  self.model_save_dir + "{}_model.tar".format(epoch))
+        # torch.save(checkpoint,  self.model_save_dir + "{}_model.tar".format(epoch))
 
         
         util.util.draw_result_pic(self.png_dir, epoch, self.csv['train_epoch_loss'],  self.csv['test_epoch_loss'])
