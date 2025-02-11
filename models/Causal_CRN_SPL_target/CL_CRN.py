@@ -88,7 +88,28 @@ class crn(nn.Module):
         ##############################
         # projection layer
         ##############################
-        self.projection = nn.Linear(config['embedding_size'], config['projection_size'])  # (256, 128)
+        # self.projection = nn.Linear(config['embedding_size'], config['projection_size'])  # (256, 128)
+
+        self.embedding_layer=nn.ModuleList()
+        self.azi_mapping_conv_layer=nn.ModuleList()
+        self.azi_mapping_final=nn.ModuleList()
+
+
+        args = [256, 256, 1]
+        kwargs['padding']=0
+
+        self.embedding_layer.append(Conv1D_Block(*args, **kwargs))
+        self.embedding_layer.append(Conv1D_Block(*args, **kwargs))
+        self.embedding_layer.append(Conv1D_Block(*args, **kwargs))
+
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       
+
+        args[1] = 128
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))
         
 
     def forward(self, x):
@@ -101,16 +122,26 @@ class crn(nn.Module):
             x=cnn_layer(x)
             x=pooling_layer(x)
         # x: (B, 32, 8)
-        x_flatten = x.view(x.size(0), -1)  # (B, 256)
+        x_flatten = x.view(x.size(0), -1, 1)  # (B, 256)
         embedding = F.normalize(x_flatten, dim=1)
         
         ##############################
         # projection layer
         ##############################
-        x = self.projection(embedding)  # (B, 128)
-        x = F.normalize(x, dim=1)
+        # x = self.projection(embedding)  # (B, 128)
+        # x = F.normalize(x, dim=1)
+
+        outputs=[]
+
+        for cnn_layer, final_layer in zip(self.azi_mapping_conv_layer, self.azi_mapping_final):
+            out = cnn_layer(embedding)
+            out = final_layer(out)
+
+            out = out.squeeze(dim=-1)
+            out = F.normalize(out, dim=-1)  # (B, 128)
+            outputs.append(out)
         
-        return x, embedding
+        return outputs, embedding
 
 
 
@@ -144,105 +175,6 @@ class main_model_for_scl(nn.Module):
 
         self.stft_model=ConvSTFT(**self.config['FFT'])
         self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
-    
-
-
-    def sigma_update(self, iter_num, epoch):
-        if iter_num%500==0:
-                # print(self.sigma)
-                pass
-        if epoch<self.config['wait_epoch']:
-            return
-        def update():
-            
-
-            if self.sigma_update_method=='add':
-                self.sigma+=self.sigma_rate
-            elif self.sigma_update_method=='multiply':
-                self.sigma*=self.sigma_rate
-            else:
-                "Not exist!!!"
-                exit()
-
-            self.sigma=torch.clamp(self.sigma, self.sigma_min, self.sigma_max)
-
-       
-        if self.training:
-
-            if self.config['iter']['update']:
-                if self.iteration_count!=self.config['iter']['update_period']:
-                    self.iteration_count+=1
-                
-                else:
-                    print('sigma_iter update')
-                    update()
-                    self.iteration_count=0
-                    return
-            
-            if self.config['epoch']['update']:
-
-                if self.now_epoch!=epoch:
-                    self.now_epoch=epoch
-                    self.epoch_count+=1
-                
-                if self.epoch_count==self.config['epoch']['update_period']:
-                    print('sigma_epoch update')
-                    update()
-                    self.epoch_count=0
-                    return 
-
-
-    def irtf_feature(self, mixed, vad):  
-        mixed_max = mixed.max()
-        mixed_min = mixed.min()
-        mixed = (mixed - mixed_min) / (mixed_max - mixed_min) * 2 - 1
-        
-        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
-        # B x C x F x T = (B, 4, 129, 501)
-        comp = torch.complex(r, i)
-        comp = comp[:, :, :26, :]
-        
-        comp_ref = comp[..., [self.ref_ch], :, :]
-        comp_ref = torch.complex(
-            comp_ref.real.clamp(min=1e-2), comp_ref.imag.clamp(min=1e-2)
-        )
-
-
-        comp=torch.cat(
-        (comp[..., self.ref_ch-1:self.ref_ch, :, :], comp[..., self.ref_ch+1:, :, :]),
-        dim=-3) / (comp_ref + 1e-2)
-
-        feature=torch.cat((comp.real, comp.imag), dim=1)    # (B, 6, 129, 501)
-        
-        
-        # (B, 2*(C-1), F, T), (B, F, T)
-        # (B, 6, 129, 501)
-        return feature, vad_frame
-    
-    
-    def _get_gcc(self, mixed, vad):     # T x F x C
-        self.device = mixed.device
-        
-        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
-        comp = torch.complex(r, i)  # B x C x F x T
-        # comp = comp[:, :, :33, :]
-        
-        linear_spectra = comp.permute(0, 3, 2, 1)   # B x T x F x C = (B, 501, 129, 4)
-        
-        # self._nb_mel_bins = 64  
-        
-        gcc_feat = []
-        for m in range(linear_spectra.shape[-1]):
-            for n in range(m+1, linear_spectra.shape[-1]):
-                R = torch.conj(linear_spectra[:, :, :, m]) * linear_spectra[:, :, :, n]        
-                cc = torch.fft.irfft(torch.exp(1.j*torch.angle(R)), dim=-1)      # (B, T, 2*(F-1)) (B, 501, 256)
-                # cc.shape (B, 345, 256)
-                gcc_feat.append(cc)
-        
-        gcc_feat = torch.stack(gcc_feat, dim=-1)      # (B, 501, 256, 6)
-        gcc_feat = gcc_feat.permute(0, 3, 2, 1)         # (B, 6, 256, 501)
-
-        return gcc_feat, vad_frame
     
     
     def compressed_RTF(self, mixed, vad):
@@ -279,7 +211,7 @@ class main_model_for_scl(nn.Module):
         
         feature, vad_frame = self.compressed_RTF(mixed, vad)    # (B, 2(C-1), F), (B, 1, T)
 
-        out, embedding = self.crn(feature)   # (B, 128), (B, 256)
+        outputs, embedding = self.crn(feature)   # 3 * (B, 128), (B, 256)
         
         
-        return out, embedding, vad_frame, feature
+        return outputs, embedding.squeeze(dim=-1), vad_frame, feature
