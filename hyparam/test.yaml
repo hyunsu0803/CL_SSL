@@ -1,4 +1,3 @@
-# torch_start_method: 'fork'
 torch_start_method: 'spawn'
 randomseed: 0
 
@@ -8,9 +7,9 @@ acc_threshold: 5
 local_maximum_distance: 30
 
 SCL: False
-trained_scl_model_path: ./results_01251033_scl/model_checkpoint/best_model.tar   # for scl
+finetune: True
 
-model: ./results/model_checkpoint/best_model.tar
+model_for_finetune: ./results/model_checkpoint/best_model.tar
 
 result_folder: 
   room_type: ['evaluation']

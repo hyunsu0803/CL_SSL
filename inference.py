@@ -51,42 +51,26 @@ class Learner_config():
             del a
 
     def model_select(self):
+
         model_name=self.args['model']['name']
         model_import='models.'+model_name+'.main'
 
         model_dir=importlib.import_module(model_import)
         
-        if self.args['hyparam']['SCL']:
-            self.args['model']['CRN']['input_cnn_channel'] = 1
-            self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
-            
-        else:
-            self.args['model']['CRN']['input_cnn_channel'] = 1 # 6
-            self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
-            
-        trained=torch.load(self.args['hyparam']['model'], map_location=self.device)     # only for infer
-        self.model.load_state_dict(trained['model_state_dict'], )                       # only for infer
+        self.args['model']['CRN']['input_cnn_channel'] = 1
+        self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
+
+        if self.args['hyparam']['finetune']:
+            trained=torch.load(self.args['hyparam']['model_for_finetune'], map_location=self.device)     
+            self.model.load_state_dict(trained['model_state_dict'], )                
+
         self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])       
-        
-        
-    def model_select_for_evaluation(self, epoch):
-        model_name=self.args['model']['name']
-        model_import='models.'+model_name+'.main'
-
-        model_dir=importlib.import_module(model_import)
-        
-        self.model=model_dir.get_model(self.args['model']).to(self.device)
-
-        trained=torch.load(self.args['hyparam']['model_dir']+f'{epoch}_model.tar', map_location=self.device)
-        self.model.load_state_dict(trained['model_state_dict'], )                       # only for infer
-        self.model=torch.nn.DataParallel(self.model, self.args['hyparam']['GPGPU']['device_ids'])
-        
+  
 
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
-        # self.model_select_for_evaluation(0)
+
         self.model_select()
-        # self.init_loss_func()
         
         return self.args
 
@@ -142,9 +126,7 @@ class Logger_config():
         print(f"acc_1 : {acc_1:.2f}\n")
 
         print(f"macro_precision : {macro_precision:.2f}\n")
-        print(f"micro_precision : {micro_precision:.2f}\n")
         print(f"macro_recall : {macro_recall:.2f}\n")
-        print(f"micro_recall : {micro_recall:.2f}\n")
 
         os.makedirs(self.result_folder['inference_folder']+ self.room_type[0], exist_ok=True)
         with open(self.result_folder['inference_folder']+ self.room_type[0]+f'/result_{MAE:.2f}.txt', 'w') as f:

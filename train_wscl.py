@@ -144,8 +144,7 @@ class Learner_config():
 
 
     def test_update(self, outputs, labels):
-        
-        # with torch.cuda.amp.autocast():
+
         losses = []
         for out, sigma in zip(outputs, self.sigma):
             

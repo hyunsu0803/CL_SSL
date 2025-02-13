@@ -1,16 +1,16 @@
-torch_start_method: 'forkserver'
+torch_start_method: 'spawn'
 randomseed: 0
 
 
-last_epoch: 400
+last_epoch: 30
 resume_epoch: 0
 
 GPGPU:
   device_ids: [0]
 
 SCL: True
-finetune: False
+finetune: True
 # finetune : False
 trained_scl_model_path: ./results_02111440_scl/model_checkpoint/best_model.tar   # for initial scl+doa training
 # finetune : True
-model_for_finetune: ./results_02051324_scl+doa/model_checkpoint/best_model.tar  # only for fine-tuning
+model_for_finetune: ./results_02131758_scl_doa/model_checkpoint/best_model.tar  # only for fine-tuning
