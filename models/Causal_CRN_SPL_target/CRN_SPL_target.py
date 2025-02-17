@@ -193,34 +193,37 @@ class main_model_for_doa(nn.Module):
         self.scl_model.train()
         
 
-    def make_target(self, vad_frame, azi):
+    def make_target(self, vad_block, azi):
+
+        # vad_block : (B, 1, block_num)
+        # azi : (B, 1)
         
         azi_target=torch.div(azi, 360//self.azi_size, rounding_mode='floor').long()        
         azi_range=torch.arange(0, self.azi_size).unsqueeze(0).to(azi_target.device)
 
-        distance=azi_target.unsqueeze(-1)*self.degree_resolution-azi_range*self.degree_resolution
+        ang_diff=azi_target.unsqueeze(-1)*self.degree_resolution-azi_range*self.degree_resolution
         
-        distance_abs=torch.abs(distance)
+        distance_abs=torch.abs(ang_diff)
         distance_abs=torch.stack((distance_abs, 360-distance_abs), dim=0)
      
-        distance=torch.min(distance_abs, dim=0).values
-        distance=torch.deg2rad(distance).unsqueeze(1)
+        ang_diff=torch.min(distance_abs, dim=0).values
+        ang_diff=torch.deg2rad(ang_diff).unsqueeze(1)
         
-        sigma=self.sigma.view(1,-1, 1,1).to(distance.device)
+        sigma=self.sigma.view(1,-1, 1,1).to(ang_diff.device)
         sigma=torch.deg2rad(sigma)
         kappa_d=torch.log(self.p)/(torch.cos(sigma)-1)
         
 
-        labelling=torch.exp(kappa_d*(torch.cos(distance)-1)).unsqueeze(-1) # batch, number of sigma, number of speakers, time, 1  
+        labelling=torch.exp(kappa_d*(torch.cos(ang_diff)-1)).unsqueeze(-1) # (B, 3, num_spk, 360, 1)  
         
-
-        vad_frame=vad_frame.unsqueeze(1).unsqueeze(-2)
+        # (B, 1, block_num) -> (B, 1, 1, 1, block_num)
+        vad_block=vad_block.unsqueeze(1).unsqueeze(-2)
         
-        vad_frame=labelling*vad_frame
+        target = labelling*vad_block   # (B, 3, num_spk, 360, block_num)
     
-        vad_frame=torch.max(vad_frame, dim=2).values
+        # vad_block=torch.max(vad_block, dim=2).values
        
-        return vad_frame # batch, sigma_num, degree, frame
+        return target.squeeze(dim=2) # (B, 3, 360, block_num)
 
     
     def pseudo_RTF(self, mixed=None, vad=None, stft=None, vad_frame=None):
@@ -266,27 +269,31 @@ class main_model_for_doa(nn.Module):
             vad_frame = vad_frame[..., :block_size*block_num]
 
         block_stft = stft.reshape(B, C, F, block_num, block_size)   # (B, C, F, block_num, block_size)
-        block_vad_frame = vad_frame.reshape(B, vad_frame.shape[1], block_num, block_size)  # (B, 1, block_num, block_size)
+        block_stft = block_stft.permute(0, 3, 1, 2, 4).reshape(-1, C, F, block_size)    # (B*block_num, C, F, block_size)
 
-        block_stft = block_stft.permute(0, 3, 1, 2, 4).reshape(-1, C, F, block_size)
-        block_vad_frame = block_vad_frame.permute(0, 2, 1, 3).reshape(-1, block_vad_frame.shape[1], block_size)
+        block_vad_frame = vad_frame.reshape(B, vad_frame.shape[1], block_num, block_size)  # (B, 1, block_num, block_size)
+        block_vad_frame = block_vad_frame.permute(0, 2, 1, 3).reshape(-1, block_vad_frame.shape[1], block_size) # (B*block_num, 1, block_size)
 
 
         ############# extract embedding
         z, embedding = self.scl_model(stft=block_stft, vad_frame=block_vad_frame)   # (B*block_num, 128) (B*block_num, 256)
-
-        # embedding = embedding.reshape(B, block_num, -1)
-        # embedding = embedding.permute(0, 2, 1)   # (B, 256, block_num)
         embedding = embedding.unsqueeze(dim=1)     # (B*block_num, 1, 256)
         
 
         ############# DOA estimation
-        out=self.crn(embedding)   # (B, 3, 360)
+        out=self.crn(embedding)   # (B*block_num, 3, 360)
+        out=out.reshape(B, block_num, 3, 360).permute(0, 2, 3, 1)   # (B, 3, 360, block_num)
+
 
         ############# make target
-        azi = torch.repeat_interleave(azi, block_num, dim=0)
-        target=self.make_target(block_vad_frame, azi)   # (B*block_num, 3, 360)
-        target, z = torch.max(target, dim=3)   # (B, 3, 360)
+        vad_block = block_vad_frame.reshape(B, block_num, -1)   # (B, block_num, block_size)
+        count_active_frame = torch.sum(vad_block==1, dim=-1)   # (B, block_num)
+        vad_block = (count_active_frame > block_size//2).int()    # (B, block_num)
+        vad_block = vad_block.unsqueeze(dim=1)   # (B, 1, block_num)
+
+        # azi : (B, 1)
+        target=self.make_target(vad_block, azi)   # (B, 3, 360, block_num)
+
         
         return out, target
 

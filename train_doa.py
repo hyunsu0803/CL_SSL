@@ -122,8 +122,8 @@ class Learner_config():
         output=torch.sigmoid(output)
         loss = self.loss_func(output, target)
 
-        for j in range(len(self.loss_weight)):
-            loss[:, j]=loss[:,j]*self.loss_weight[j]
+        # for j in range(len(self.loss_weight)):
+        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
 
         loss_mean=loss.mean()
         
@@ -147,13 +147,13 @@ class Learner_config():
 
     def test_update(self, output, target):
         
-        target=target[:, self.loss_train_map_num]       # :, [0, 1, 2]
-        output=output[:, self.loss_train_map_num].sigmoid()
+        # target=target[:, self.loss_train_map_num]       # :, [0, 1, 2]
+        # output=output[:, self.loss_train_map_num].sigmoid()
 
         loss=self.loss_func(output, target)
 
-        for j in range(len(self.loss_weight)):
-            loss[:, j]=loss[:,j]*self.loss_weight[j]
+        # for j in range(len(self.loss_weight)):
+        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
         loss_mean=loss.mean()
         
         

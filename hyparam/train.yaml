@@ -11,6 +11,6 @@ GPGPU:
 SCL: True
 finetune: False
 # finetune : False
-trained_scl_model_path: ./results_02111440_scl/model_checkpoint/best_model.tar   # for initial scl+doa training
+trained_scl_model_path: ./results_02051638_scl/model_checkpoint/best_model.tar   # for initial scl+doa training
 # finetune : True
 model_for_finetune: ./results_02122120_scl/model_checkpoint/best_model.tar  # only for fine-tuning
