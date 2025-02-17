@@ -193,7 +193,7 @@ class main_model_for_doa(nn.Module):
         self.scl_model.train()
         
 
-    def make_target(self, vad_frame, azi, iter_num, epoch):
+    def make_target(self, vad_frame, azi):
         
         azi_target=torch.div(azi, 360//self.azi_size, rounding_mode='floor').long()        
         azi_range=torch.arange(0, self.azi_size).unsqueeze(0).to(azi_target.device)
@@ -223,7 +223,7 @@ class main_model_for_doa(nn.Module):
         return vad_frame # batch, sigma_num, degree, frame
 
     
-    def compressed_RTF(self, mixed, vad):
+    def pseudo_RTF(self, mixed=None, vad=None, stft=None, vad_frame=None):
         
         r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)     # vad_frame : (B, 1, 501)
         stft = torch.complex(r, i)  # B x C x F x T
@@ -242,23 +242,50 @@ class main_model_for_doa(nn.Module):
         col0 = torch.cat((col0[:,:,self.ref_ch-1:self.ref_ch], col0[:,:,self.ref_ch+1:]), dim=-1)    # (B, F, C-1)
         col00 = torch.complex(col00.real.clamp(self.eps), col00.imag.clamp(self.eps))
         
-        c_rtf = col0 / col00[:, :, None]    # (B, F, C-1)
-        c_rtf = torch.cat((c_rtf.real, c_rtf.imag), dim=-1)    # (B, F, 2(C-1))
+        pRTF = col0 / col00[:, :, None]    # (B, F, C-1)
+        pRTF = torch.cat((pRTF.real, pRTF.imag), dim=-1)    # (B, F, 2(C-1))
 
-        c_rtf = c_rtf.permute(0, 2, 1)    # (B, 2(C-1), F)
+        pRTF = pRTF.permute(0, 2, 1)    # (B, 2(C-1), F)
 
-        return c_rtf, vad_frame
+        return pRTF, vad_frame
 
         
-    def forward(self, mixed, vad, azi, iter_num, epoch, LOCATA=False):
+    def forward(self, mixed, vad, azi):
 
-        z, feature, vad_frame, c_rtf = self.scl_model(mixed, vad)
-        feature = feature.unsqueeze(dim=1)                # (B, 1, 256)
+        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
+        stft = torch.complex(r, i)      # B x C x F x T
+        B, C, F, T = stft.shape
+
+
+        ############ split into blocks
+        frame_num = stft.shape[-1]
+        block_size = 25
+        block_num = frame_num // block_size
+        if frame_num % block_size != 0:
+            stft = stft[..., :block_size*block_num]
+            vad_frame = vad_frame[..., :block_size*block_num]
+
+        block_stft = stft.reshape(B, C, F, block_num, block_size)   # (B, C, F, block_num, block_size)
+        block_vad_frame = vad_frame.reshape(B, vad_frame.shape[1], block_num, block_size)  # (B, 1, block_num, block_size)
+
+        block_stft = block_stft.permute(0, 3, 1, 2, 4).reshape(-1, C, F, block_size)
+        block_vad_frame = block_vad_frame.permute(0, 2, 1, 3).reshape(-1, block_vad_frame.shape[1], block_size)
+
+
+        ############# extract embedding
+        z, embedding = self.scl_model(stft=block_stft, vad_frame=block_vad_frame)   # (B*block_num, 128) (B*block_num, 256)
+
+        # embedding = embedding.reshape(B, block_num, -1)
+        # embedding = embedding.permute(0, 2, 1)   # (B, 256, block_num)
+        embedding = embedding.unsqueeze(dim=1)     # (B*block_num, 1, 256)
         
-        out=self.crn(feature)   # (B, 3, 360)
 
+        ############# DOA estimation
+        out=self.crn(embedding)   # (B, 3, 360)
 
-        target=self.make_target( vad_frame, azi, iter_num, epoch)
+        ############# make target
+        azi = torch.repeat_interleave(azi, block_num, dim=0)
+        target=self.make_target(block_vad_frame, azi)   # (B*block_num, 3, 360)
         target, z = torch.max(target, dim=3)   # (B, 3, 360)
         
         return out, target

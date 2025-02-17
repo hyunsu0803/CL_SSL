@@ -339,7 +339,7 @@ class Trainer():
     
 
     def train(self, epoch):
-        import pdb
+
         self.model.train()
 
         
@@ -350,7 +350,7 @@ class Trainer():
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
             
-            out, target = self.model(mixed, vad, speech_azi, iter_num, epoch)
+            out, target = self.model(mixed, vad, speech_azi)
             
             loss = self.learner.train_update(out, target)
                 
@@ -380,7 +380,7 @@ class Trainer():
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
                 
-                out, target = self.model(mixed, vad, speech_azi, iter_num, epoch)
+                out, target = self.model(mixed, vad, speech_azi)
                 
                 loss=self.learner.test_update(out, target)
                     

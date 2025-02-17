@@ -177,12 +177,7 @@ class main_model_for_scl(nn.Module):
         self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
     
     
-    def compressed_RTF(self, mixed, vad):
-        
-        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)     # vad_frame : (B, 1, 501)
-        stft = torch.complex(r, i)  # B x C x F x T
-        
-        num_select_time = 31
+    def pseudo_RTF(self, stft, vad_frame):
         
         time_indices = [len(torch.nonzero(vad_frame[b, 0] == 1, as_tuple=True)[0]) for b in range(vad_frame.shape[0])]
         time_indices = [ idx if idx > 0 else 1 for idx in time_indices ]
@@ -198,20 +193,25 @@ class main_model_for_scl(nn.Module):
         col0 = torch.cat((col0[:,:,self.ref_ch-1:self.ref_ch], col0[:,:,self.ref_ch+1:]), dim=-1)    # (B, F, C-1)
         col00 = torch.complex(col00.real.clamp(self.eps), col00.imag.clamp(self.eps))
         
-        c_rtf = col0 / col00[:, :, None]    # (B, F, C-1)
-        c_rtf = torch.cat((c_rtf.real, c_rtf.imag), dim=-1)    # (B, F, 2(C-1))
+        pRTF = col0 / col00[:, :, None]    # (B, F, C-1)
+        pRTF = torch.cat((pRTF.real, pRTF.imag), dim=-1)    # (B, F, 2(C-1))
 
-        c_rtf = c_rtf.permute(0, 2, 1)    # (B, 2(C-1), F)
+        pRTF = pRTF.permute(0, 2, 1)    # (B, 2(C-1), F)
 
-        return c_rtf, vad_frame
+        return pRTF
 
 
         
-    def forward(self, mixed, vad):
-        
-        feature, vad_frame = self.compressed_RTF(mixed, vad)    # (B, 2(C-1), F), (B, 1, T)
+    def forward(self, mixed=None, vad=None, stft=None, vad_frame=None):
 
-        outputs, embedding = self.crn(feature)   # 3 * (B, 128), (B, 256)
+        if mixed is not None and vad is not None:   # for SCL training
+            r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
+            stft = torch.complex(r, i)
+
+        pRTF = self.pseudo_RTF(stft, vad_frame)    # (B, 2(C-1), F), (B, 1, T)
+
+
+        outputs, embedding = self.crn(pRTF)   # 3 * (B, 128), (B, 256)
         
         
-        return outputs, embedding.squeeze(dim=-1), vad_frame, feature
+        return outputs, embedding.squeeze(dim=-1)

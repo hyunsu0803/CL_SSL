@@ -377,13 +377,13 @@ class Trainer():
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
                 
-            outputs, embedding, vad_frame, c_rtf = self.model(mixed, vad)
+            outputs, embedding = self.model(mixed=mixed, vad=vad)
             
             loss = self.learner.train_update(outputs, speech_azi)
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, outputs, loss, embedding, vad_frame, c_rtf])
+            self.learner.memory_delete([mixed, vad, speech_azi, outputs, loss, embedding])
             
             self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         
@@ -412,13 +412,13 @@ class Trainer():
 
                 
                 
-                out, embedding, vad_frame, c_rtf = self.model(mixed, vad)
+                out, embedding = self.model(mixed, vad)
                 
                 loss=self.learner.test_update(out, speech_azi)
                     
                     
                 self.logger.test_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding, vad_frame, c_rtf])
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding])
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
             
