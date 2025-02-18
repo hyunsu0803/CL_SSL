@@ -79,7 +79,7 @@ class Learner_config():
 
     def init_optimizer(self):
 
-        self.args['learner']['optimizer']['config']['lr'] = 8.0e-4 # 1.0e-3
+        self.args['learner']['optimizer']['config']['lr'] = 1.0e-3
         
         a=importlib.import_module('torch.optim')
         assert hasattr(a, self.args['learner']['optimizer']['type']), "optimizer {} is not in {}".format(self.args['learner']['optimizer']['type'], 'torch')

@@ -163,18 +163,21 @@ class Logger_config():
             self.save_config_dict['number_of_degrees'] += 1
 
             e = error[i]
+
             if e <= 10:
                 self.save_config_dict['confusion_matrix'][str(ans_azi)]['TP'] += 1
-            elif e <= 30:
+            else:
                 self.save_config_dict['confusion_matrix'][str(ans_azi)]['FN'] += 1
                 self.save_config_dict['confusion_matrix'][str(output_azi[i])]['FP'] += 1
 
-            if e <= 10:
-                self.save_config_dict['acc_10'] += 1
-            if e <= 5:
-                self.save_config_dict['acc_5'] += 1
+
             if e <= 1:
                 self.save_config_dict['acc_1'] += 1
+            if e <= 5:
+                self.save_config_dict['acc_5'] += 1
+            if e <= 10:
+                self.save_config_dict['acc_10'] += 1
+                
 
   
     def config(self,):

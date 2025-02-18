@@ -2,7 +2,7 @@ torch_start_method: 'spawn'
 randomseed: 0
 
 
-last_epoch: 225
+last_epoch: 88
 resume_epoch: 0
 
 GPGPU:
@@ -13,4 +13,4 @@ finetune: True
 # finetune : False
 trained_scl_model_path: ./results_02051638_scl/model_checkpoint/best_model.tar   # for initial scl+doa training
 # finetune : True
-model_for_finetune: ./results_02181032_scl_doa/model_checkpoint/best_model.tar  # only for fine-tuning
+model_for_finetune: ./results_02181604_scl_doa/model_checkpoint/best_model.tar  # only for fine-tuning
