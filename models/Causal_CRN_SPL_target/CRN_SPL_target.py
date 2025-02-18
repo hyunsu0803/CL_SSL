@@ -220,8 +220,6 @@ class main_model_for_doa(nn.Module):
         vad_block=vad_block.unsqueeze(1).unsqueeze(-2)
         
         target = labelling*vad_block   # (B, 3, num_spk, 360, block_num)
-    
-        # vad_block=torch.max(vad_block, dim=2).values
        
         return target.squeeze(dim=2) # (B, 3, 360, block_num)
 
@@ -295,6 +293,6 @@ class main_model_for_doa(nn.Module):
         target=self.make_target(vad_block, azi)   # (B, 3, 360, block_num)
 
         
-        return out, target
+        return out, target, vad_block
 
 

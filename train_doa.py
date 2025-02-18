@@ -79,7 +79,7 @@ class Learner_config():
 
     def init_optimizer(self):
 
-        self.args['learner']['optimizer']['config']['lr'] = 1.0e-3
+        self.args['learner']['optimizer']['config']['lr'] = 8.0e-4 # 1.0e-3
         
         a=importlib.import_module('torch.optim')
         assert hasattr(a, self.args['learner']['optimizer']['type']), "optimizer {} is not in {}".format(self.args['learner']['optimizer']['type'], 'torch')
@@ -122,9 +122,6 @@ class Learner_config():
         output=torch.sigmoid(output)
         loss = self.loss_func(output, target)
 
-        # for j in range(len(self.loss_weight)):
-        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
-
         loss_mean=loss.mean()
         
         if torch.isnan(loss).any():
@@ -147,15 +144,10 @@ class Learner_config():
 
     def test_update(self, output, target):
         
-        # target=target[:, self.loss_train_map_num]       # :, [0, 1, 2]
-        # output=output[:, self.loss_train_map_num].sigmoid()
-
+        output=torch.sigmoid(output)
         loss=self.loss_func(output, target)
 
-        # for j in range(len(self.loss_weight)):
-        #     loss[:, j]=loss[:,j]*self.loss_weight[j]
         loss_mean=loss.mean()
-        
         
         if torch.isnan(loss_mean):
             print('nan occured')
@@ -266,7 +258,7 @@ class Logger_config():
             os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
             torch.save(checkpoint, self.model_save_dir + "best_model.tar")
             print("new best model\n")
-        # torch.save(checkpoint,  self.model_save_dir + "{}_model.tar".format(epoch))
+        torch.save(checkpoint,  self.model_save_dir + "last_model.tar".format(epoch))
 
         
         util.util.draw_result_pic(self.png_dir, epoch, self.csv['train_epoch_loss'],  self.csv['test_epoch_loss'])
@@ -350,13 +342,13 @@ class Trainer():
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
             
-            out, target = self.model(mixed, vad, speech_azi)
+            out, target, vad_block = self.model(mixed, vad, speech_azi)
             
             loss = self.learner.train_update(out, target)
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, _, out, loss, target])
+            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, _, out, loss, target, vad_block])
             
         
         
@@ -380,13 +372,13 @@ class Trainer():
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
                 
-                out, target = self.model(mixed, vad, speech_azi)
+                out, target, vad_block = self.model(mixed, vad, speech_azi)
                 
                 loss=self.learner.test_update(out, target)
                     
                     
                 self.logger.test_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target])
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target, vad_block])
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
             
