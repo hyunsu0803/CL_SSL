@@ -25,7 +25,7 @@ class Weighted_SupConLoss(nn.Module):
             
         self.azi_size=360
         self.degree_resolution=360/self.azi_size
-        self.sigma = torch.tensor([2.0])
+        self.sigma = None
         self.p = torch.tensor([0.707106781])
         self.contrast_count = None
         self.device = None
@@ -43,21 +43,10 @@ class Weighted_SupConLoss(nn.Module):
         
 
         labelling=torch.exp(kappa_d*(torch.cos(distance)-1))    # (181)
-        
-        # print(labelling)
-        # plt.figure(figsize=(8, 4))
-        # plt.plot(torch.rad2deg(distance), labelling.numpy(), label="Labelling Curve")
-        # plt.title("Contrast Weight")
-        # plt.xlabel("Distance (degrees)")
-        # plt.ylabel("Labelling Value")
-        # plt.grid(True)
-        # plt.legend()
-        # plt.savefig("Labelling_Curve.png")
-        # exit()
+
         
         return labelling
 
-        # self.sigma_update(iter_num, epoch)
         
     
     def generate_mask(self, labels):
@@ -72,13 +61,7 @@ class Weighted_SupConLoss(nn.Module):
             
 
     def forward(self, features, labels, sigma):
-        """Compute loss for model. 
-        Args:
-            features: hidden vector of shape [bsz, 3, feat_dim].
-            labels: ground truth of shape [bsz].
-        Returns:
-            A loss scalar.
-        """
+
         self.device = (torch.device('cuda:0')
                   if features.is_cuda
                   else torch.device('cpu'))
@@ -97,7 +80,7 @@ class Weighted_SupConLoss(nn.Module):
         if sigma == 0:
             mask = torch.eq(labels, labels.T).float().to(self.device)   # (B, B)
         else:
-            self.sigma[0] = sigma
+            self.sigma = torch.tensor(sigma)
             self.labelling = self.generate_weight().to(self.device)
             mask = self.generate_mask(labels).to(self.device)           # (B, B)
 
