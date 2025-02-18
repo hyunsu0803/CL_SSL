@@ -107,23 +107,22 @@ class Logger_config():
 
         macro_precision = macro_precision/360 * 100
         macro_recall = macro_recall/360 * 100
-        micro_precision = sum_TP/(sum_TP+sum_FP) * 100
-        micro_recall = sum_TP/(sum_TP+sum_FN) * 100
         
         total_error_sum = self.save_config_dict['total_error_sum']
         number_of_degrees = self.save_config_dict['number_of_degrees']
 
         MAE = total_error_sum/number_of_degrees
-        acc_180 = self.save_config_dict['acc_180']/number_of_degrees * 100
+
         acc_10 = self.save_config_dict['acc_10']/number_of_degrees  * 100
         acc_5 = self.save_config_dict['acc_5']/number_of_degrees    * 100
         acc_1 = self.save_config_dict['acc_1']/number_of_degrees    * 100
 
         print(f"MAE : {MAE:.2f}\n")
-        print(f"acc_180 : {acc_180:.2f}\n")
+
         print(f"acc_10 : {acc_10:.2f}\n")
         print(f"acc_5 : {acc_5:.2f}\n")
         print(f"acc_1 : {acc_1:.2f}\n")
+
 
         print(f"macro_precision : {macro_precision:.2f}\n")
         print(f"macro_recall : {macro_recall:.2f}\n")
@@ -134,8 +133,6 @@ class Logger_config():
             f.write('\nargmax_doa_error\n')
             f.write(str(MAE)+'\n\n')
 
-            f.write('\nacc_180\n')
-            f.write(str(acc_180))
             f.write('\nacc_10\n')
             f.write(str(acc_10))
             f.write('\nacc_5\n')
@@ -145,41 +142,39 @@ class Logger_config():
 
             f.write('\n\nmacro_precision\n')
             f.write(str(macro_precision))
-            f.write('\nmicro_precision\n')
-            f.write(str(micro_precision))
             f.write('\nmacro_recall\n')
             f.write(str(macro_recall))
-            f.write('\nmicro_recall\n')
-            f.write(str(micro_recall))
 
     
-    def error_update(self, output_azi, ans_azi):
+    def error_update(self, output_azi, ans_azi, vad_block):
+
+        # output_azi : (block_num)
+        # ans_azi : (1)
+        # vad_block : (block_num)
 
         error = abs(output_azi - ans_azi)
-        error = min(error, 360-error)
+        error = np.minimum(error, 360-error)
 
-        if error <= 10:
-            self.save_config_dict['confusion_matrix'][str(ans_azi)]['TP'] += 1
-        else:
-            self.save_config_dict['confusion_matrix'][str(ans_azi)]['FN'] += 1
-            self.save_config_dict['confusion_matrix'][str(output_azi)]['FP'] += 1
+        for i in range(len(vad_block)):
+            if vad_block[i] == 0:
+                continue
 
-        
-        self.save_config_dict['total_error_sum'] += error
-        self.save_config_dict['number_of_degrees'] += 1
+            self.save_config_dict['total_error_sum'] += error[i]
+            self.save_config_dict['number_of_degrees'] += 1
 
-        if error <= 180:
-            self.save_config_dict['acc_180'] += 1
-        if error <= 20:
-            self.save_config_dict['acc_20'] += 1
-        if error <= 10:
-            self.save_config_dict['acc_10'] += 1
-        if error <= 5:
-            self.save_config_dict['acc_5'] += 1
-        if error <= 3:
-            self.save_config_dict['acc_3'] += 1
-        if error <= 1:
-            self.save_config_dict['acc_1'] += 1
+            e = error[i]
+            if e <= 10:
+                self.save_config_dict['confusion_matrix'][str(ans_azi)]['TP'] += 1
+            elif e <= 30:
+                self.save_config_dict['confusion_matrix'][str(ans_azi)]['FN'] += 1
+                self.save_config_dict['confusion_matrix'][str(output_azi[i])]['FP'] += 1
+
+            if e <= 10:
+                self.save_config_dict['acc_10'] += 1
+            if e <= 5:
+                self.save_config_dict['acc_5'] += 1
+            if e <= 1:
+                self.save_config_dict['acc_1'] += 1
 
   
     def config(self,):
@@ -187,11 +182,8 @@ class Logger_config():
         self.save_config_dict=dict()
 
         self.save_config_dict['acc_1']=0
-        self.save_config_dict['acc_3']=0
         self.save_config_dict['acc_5']=0
         self.save_config_dict['acc_10']=0
-        self.save_config_dict['acc_20']=0
-        self.save_config_dict['acc_180']=0
         self.save_config_dict['total_error_sum']=0
         self.save_config_dict['number_of_degrees']=0
 
@@ -232,9 +224,7 @@ class Tester():
 
         self.logger=Logger_config(self.args)
         self.args=self.logger.config()
-        
-        # self.utils=Utils_for_demo()
-        
+
     
     def run(self, ):
       
@@ -261,21 +251,21 @@ class Tester():
                     speech_azi=speech_azi.to(self.hyperparameter.device)
     
 
-                    out, target=self.model(mixed, vad, speech_azi, iter_num, epoch)
+                    out, target, vad_block = self.model(mixed, vad, speech_azi)
 
                     out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot                    
                     target=target.cpu().numpy()                 # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot
-                    vad=vad.cpu().numpy()
+                    vad_block=vad_block.cpu().numpy()
                     speech_azi=speech_azi.cpu().numpy()         # (B, 1)
                     mixed=mixed.cpu().numpy()                   # (B, 4, 64000)
 
 
-                    output_azi = out[0,2].argmax()
+                    output_azi = out[0,2].argmax(axis=0)    # (block_num, )
                     ans_azi = speech_azi[0,0]
                     
                     
                     # pkl_idx=pkl_idx[0]
-                    pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
+                    # pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
                     
                     # ### save as polar histogram
                     # duration = int(mixed.shape[2] / 44100 * 10) / 10 # in seconds
@@ -321,12 +311,11 @@ class Tester():
                     # plt.savefig('/root/mydir/results/spectrograms/' + pkl_idx.split('.')[0]+ '.png')
                     # plt.close()
 
-                    self.logger.error_update(output_azi, ans_azi)
+                    self.logger.error_update(output_azi, ans_azi, vad_block[0,0])
                     
-                    self.learner.memory_delete([mixed, vad, speech_azi, out, target,])
+                    self.learner.memory_delete([mixed, vad, speech_azi, out, target, vad_block])
                   
                 self.logger.save_output(epoch)
-                # self.logger.config()
 
             break
 
