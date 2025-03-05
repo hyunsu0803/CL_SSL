@@ -5,7 +5,7 @@ import numpy as np
 import random
 import importlib
 from tqdm import tqdm
-from dataloader.wrap_dataload import Synth_dataload
+from dataloader.wrap_dataload import Synth_dataload, Real_dataload
 
 
 class Hyparam_set():
@@ -204,6 +204,7 @@ class Dataloader_config():
     
     def config(self):
         self.test_loader=Synth_dataload(self.args['dataloader']['test']['loader'])
+        # self.test_loader = Real_dataload(self.args['dataloader']['test']['loader'])
        
         return self.args
     
@@ -247,8 +248,16 @@ class Tester():
                 # speech_azi : (1, 1)
                 # num_spk : (1)
                 # vad : (1, 1, 64000)
-                for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
-                    
+                for iter_num, (mixedd, vadd, speech_azi) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
+                    import soundfile as sf
+                    mixed, fs = sf.read('STARSS23/mic_dev_downsampled/dev-train-sony/fold3_room21_mix022.wav')
+                    vad = np.load('STARSS23/mic_dev_vad/dev-train-sony/fold3_room21_mix022.npy')
+                    azi = np.load('STARSS23/mic_dev_label/dev-train-sony/fold3_room21_mix022.npy')
+
+                    mixed = torch.tensor(mixed)
+                    vad = torch.tensor(vad)
+                    speech_azi = torch.tensor(azi)
+
                     mixed=mixed.to(self.hyperparameter.device)
                     vad=vad.to(self.hyperparameter.device)
                     speech_azi=speech_azi.to(self.hyperparameter.device)

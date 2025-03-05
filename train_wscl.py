@@ -9,6 +9,8 @@ import wandb
 from tqdm import tqdm
 from dataloader.wrap_dataload import Train_dataload_for_scl, Synth_dataload, Real_dataload
 import pandas as pd
+import gc
+
 
 
 
@@ -53,7 +55,6 @@ class Hyparam_set():
 class Learner_config():
     def __init__(self, args) -> None:
         self.args=args
-        self.scaler = torch.cuda.amp.GradScaler()   # mixed precision
 
     def memory_delete(self, *args):
         for a in args:
@@ -89,7 +90,7 @@ class Learner_config():
         
     def init_optimzer_scheduler(self, ):
 
-        self.args['learner']['optimizer_scheduler']['config']['min_lr'] = 9.0e-5
+        self.args['learner']['optimizer_scheduler']['config']['min_lr'] = 1.0e-4
 
         a=importlib.import_module('torch.optim.lr_scheduler')
         assert hasattr(a, self.args['learner']['optimizer_scheduler']['type']), "optimizer scheduler {} is not in {}".format(self.args['learner']['optimizer']['type'], 'torch')
@@ -117,9 +118,17 @@ class Learner_config():
 
 
     def train_update(self, outputs, labels):
-         
+        # outputs : [(B, 128, n), (B, 128, n), (B, 128, n)]
+        # labels : (B, 1)
+
+
         losses = []
+        labels = labels.repeat_interleave(outputs[0].shape[-1], dim=0)  # (B*n)
         for out, sigma in zip(outputs, self.sigma):
+
+            out = out.permute(0, 2, 1)  # (B, n, 128)
+            out = out.reshape(-1, out.shape[-1])  # (B*n, 128)
+            
             
             loss_mean = self.loss_func(out, labels, sigma)
 
@@ -144,9 +153,17 @@ class Learner_config():
 
 
     def test_update(self, outputs, labels):
+        # outputs : [(B, 128, n), (B, 128, n), (B, 128, n)]
+        # labels : (B, 1)
+
 
         losses = []
+        labels = labels.repeat_interleave(outputs[0].shape[-1], dim=0)  # (B*n)
         for out, sigma in zip(outputs, self.sigma):
+
+            out = out.permute(0, 2, 1)  # (B, n, 128)
+            out = out.reshape(-1, out.shape[-1])  # (B*n, 128)
+            
             
             loss_mean = self.loss_func(out, labels, sigma)
 
@@ -266,7 +283,7 @@ class Logger_config():
             os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
             torch.save(checkpoint, self.model_save_dir + "best_model.tar")
             print("new best model\n")
-        # torch.save(checkpoint,  self.model_save_dir + "{}_model.tar".format(epoch))
+        torch.save(checkpoint,  self.model_save_dir + "last_model.tar")
 
         
         util.util.draw_result_pic(self.png_dir, epoch, self.csv['train_epoch_loss'],  self.csv['test_epoch_loss'])
@@ -289,9 +306,9 @@ class Dataloader_config():
     def config(self):
 
         self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 64
-        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 4
+        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 8
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 64
-        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 4
+        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 16
         self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/scl/'
         
         self.train_loader=Train_dataload_for_scl(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
@@ -337,20 +354,8 @@ class Trainer():
             
             self.logger.epoch_finish(epoch, self.model, self.optimizer)
             
-           
-    def permute_n_augment(self, mixed, vad, speech_azi):
-        
-        mixed = mixed.reshape(-1, mixed.shape[-2], mixed.shape[-1])
-        vad = vad.reshape(-1, vad.shape[-2], vad.shape[-1])
-        speech_azi = speech_azi.reshape(-1, speech_azi.shape[-1])
-            
-        perm = torch.randperm(mixed.size(0)) # (size : 256)
-        
-        mixed = mixed.index_select(0, perm)  
-        vad = vad.index_select(0, perm)  
-        speech_azi = speech_azi.index_select(0, perm)
-        
-        return mixed, vad, speech_azi
+    
+
     
 
     def train(self, epoch):
@@ -363,32 +368,26 @@ class Trainer():
             
         self.n_room = 8
         self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
-        for iter_num, (mixed, vad, speech_azi, speech_ele,_) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
-            # mixed : [64, 8, 4, 64000]
-            # vad : [64, 8, 1, 64000]
-            # speech_azi : [64, 8, 1]
-            mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
-            # mixed : [512, 4, 64000]   
-            # vad : [512, 1, 64000]
-            # speech_azi : [512, 1]
+        for iter_num, (mixed, vad, speech_azi, speech_ele, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+
+            mixed = mixed.to(self.hyperparameter.device)
+            vad = vad.to(self.hyperparameter.device)
+            speech_azi = speech_azi.to(self.hyperparameter.device)
             
-            mixed=mixed.to(self.hyperparameter.device)
-            vad=vad.to(self.hyperparameter.device)
-            speech_azi=speech_azi.to(self.hyperparameter.device)
-            
-                
-            outputs, embedding = self.model(mixed=mixed, vad=vad)
+            outputs, embedding, speech_azi = self.model(mixed, vad, speech_azi) # (B, 128, n), (B, 256, n) (B, 1)
             
             loss = self.learner.train_update(outputs, speech_azi)
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, outputs, loss, embedding])
+            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, _, outputs, loss, embedding])
+            gc.collect()
             
             self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         
         
         self.logger.train_epoch_log()
+        
 
  
     def validation(self, epoch):
@@ -403,24 +402,24 @@ class Trainer():
             # speech_azi : (16, 1)
             # num_spk : (16)
             for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
-                
-                mixed, vad, speech_azi = self.permute_n_augment(mixed, vad, speech_azi)
-                
+                                
+
                 mixed=mixed.to(self.hyperparameter.device)
                 vad=vad.to(self.hyperparameter.device)
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
-                
-                
-                out, embedding = self.model(mixed, vad)
+                out, embedding, speech_azi = self.model(mixed, vad, speech_azi)
                 
                 loss=self.learner.test_update(out, speech_azi)
                     
                     
                 self.logger.test_iter_log(loss)
                 self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding])
+                gc.collect()
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
+            
+            
             
 
 if __name__=='__main__':

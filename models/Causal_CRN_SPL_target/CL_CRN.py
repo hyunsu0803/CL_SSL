@@ -1,12 +1,10 @@
 from .FFT import ConvSTFT 
+from .prepro import Prepro
 from torch import nn
 import torch.nn.functional as F
 import torch
 from util import *
 import numpy as np
-import math
-import librosa
-import torchaudio.transforms as T
 
 
 class Causal_Conv2D_Block(nn.Module):
@@ -52,24 +50,22 @@ class Conv1D_Block(nn.Module):
 
 
 class crn(nn.Module):
-    def __init__(self, config, output_num, azi_size):
+    def __init__(self, config):
         super(crn, self).__init__()
 
-        
-        self.output_num=output_num  
-        self.azi_size=azi_size
+        self.config=config
 
         
-        self.cnn_num=config['CNN']['layer_num']
-        self.kernel_size=config['CNN']['kernel_size']       # 3
-        self.filter_size=config['CNN']['filter']            # 32
+        self.cnn_num=self.config['CNN']['layer_num']
+        self.kernel_size=self.config['CNN']['kernel_size']       # 3
+        self.filter_size=self.config['CNN']['filter']            # 64
 
-        self.max_pool_kernel=config['CNN']['max_pool']['kernel_size']
-        self.max_pool_stride=config['CNN']['max_pool']['stride']
+        self.max_pool_kernel=self.config['CNN']['max_pool']['kernel_size']
+        self.max_pool_stride=self.config['CNN']['max_pool']['stride']
         
-        args = [config['input_cnn_channel'],  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
+        args = [self.config['input_cnn_channel'],  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
        
-        kwargs = {'stride': 1, 'padding': self.kernel_size // 2, 'dilation': 1}
+        kwargs = {'stride': 1, 'padding': [1, 2], 'dilation': 1}
 
 
         ##############################
@@ -77,30 +73,30 @@ class crn(nn.Module):
         ##############################
         self.cnn=nn.ModuleList()
         self.pooling=nn.ModuleList()
-        self.cnn.append(Conv1D_Block(*args, **kwargs))       # (2*2*(C-1), 32, 3)
-        self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
+        self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))       # (2*2*(C-1), 32, 3)
+        self.pooling.append(nn.MaxPool2d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
         
-        args[0]=config['CNN']['filter']                             # (64, 32, 3)   in_channel 변경
+        args[0]=self.config['CNN']['filter']                             # (64, 32, 3)   in_channel 변경
         for count in range(self.cnn_num-1):
-            self.cnn.append(Conv1D_Block(*args, **kwargs))   
-            self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
+            self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))   
+            self.pooling.append(nn.MaxPool2d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
     
+
+        self.GRU_layer=nn.GRU(**config['GRU'])
+        self.h0=torch.zeros(*config['GRU_init']['shape'])
+        self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
+
+
         ##############################
         # projection layer
         ##############################
-        # self.projection = nn.Linear(config['embedding_size'], config['projection_size'])  # (256, 128)
 
-        self.embedding_layer=nn.ModuleList()
         self.azi_mapping_conv_layer=nn.ModuleList()
         self.azi_mapping_final=nn.ModuleList()
 
 
         args = [256, 256, 1]
         kwargs['padding']=0
-
-        self.embedding_layer.append(Conv1D_Block(*args, **kwargs))
-        self.embedding_layer.append(Conv1D_Block(*args, **kwargs))
-        self.embedding_layer.append(Conv1D_Block(*args, **kwargs))
 
         self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       
         self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       
@@ -117,19 +113,27 @@ class crn(nn.Module):
         ##############################
         # CNN layer
         ##############################
-        # x: (B, 6, 129)
+        # x: (B, 6, 129, n) -> (B, 64, 64, n) -> (B, 64, 32, n) -> (B, 64, 16, n) -> (B, 64, 8, n)
         for cnn_layer, pooling_layer in zip(self.cnn, self.pooling):
             x=cnn_layer(x)
             x=pooling_layer(x)
-        # x: (B, 32, 8)
-        x_flatten = x.view(x.size(0), -1, 1)  # (B, 256)
-        embedding = F.normalize(x_flatten, dim=1)
+
+
+        b, c, f, t=x.shape              # (B, 64, 8, n)
+        x=x.view(b, -1, t).permute(0,2,1)   # (B, n, 64*8=512)
+
+        h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  # h0 : (num_layers, B, hidden_size) = (3, 512, 256)
+        self.GRU_layer.flatten_parameters()
         
+        x, h=self.GRU_layer(x, h0)      # (B, n, 256(hidden size))
+
+        embedding = F.normalize(x, dim=-1).permute(0, 2, 1)  # (B, 256, n)
+        
+
+
         ##############################
         # projection layer
         ##############################
-        # x = self.projection(embedding)  # (B, 128)
-        # x = F.normalize(x, dim=1)
 
         outputs=[]
 
@@ -137,8 +141,8 @@ class crn(nn.Module):
             out = cnn_layer(embedding)
             out = final_layer(out)
 
-            out = out.squeeze(dim=-1)
-            out = F.normalize(out, dim=-1)  # (B, 128)
+            out = F.normalize(out, dim=1)  # (B, 128, n)
+
             outputs.append(out)
         
         return outputs, embedding
@@ -148,70 +152,27 @@ class crn(nn.Module):
 class main_model_for_scl(nn.Module):
     def __init__(self, config):
         super(main_model_for_scl, self).__init__()
+        
         self.config=config
-        
-        self.eps=np.finfo(np.float32).eps
-        self.ref_ch=self.config['ref_ch']
-
-        ###### sigma
-
-        self.p=torch.tensor(self.config['p'])
         self.sigma=torch.tensor(self.config['sigma_start'])
-        self.sigma_max=torch.tensor(self.config['sigma_end']['max'])
-        self.sigma_min=torch.tensor(self.config['sigma_end']['min'])
-        self.sigma_rate=torch.tensor(self.config['sigma_rate'])
-        self.sigma_update_method=self.config['sigma_update_method']
-        
-        self.iteration_count=0        
-        self.epoch_count=0
-        self.now_epoch=0
-
-       
-        ######
-       
-        # self.max_spk=self.config['max_spk']
         self.degree_resolution = self.config['degree_resolution']
         self.azi_size=360//self.degree_resolution
 
+        
         self.stft_model=ConvSTFT(**self.config['FFT'])
-        self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
+        self.prepro=Prepro(self.stft_model)
+        self.crn=crn(self.config['CRN'])
+
+
+        
+    def forward(self, mixed, vad, azi_list):
+
+        mixed, vad, azi_list = self.prepro.permute_data(mixed, vad, azi_list)
+        block_stft, block_vad_frame = self.prepro.make_block(mixed, vad)
+        ibRTF, vad_block = self.prepro.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, n)
+
+        outputs, embedding = self.crn(ibRTF)    # (B, n, 128), (B, 256, n)
+        
+        return outputs, embedding, azi_list
     
-    
-    def pseudo_RTF(self, stft, vad_frame):
-        
-        time_indices = [len(torch.nonzero(vad_frame[b, 0] == 1, as_tuple=True)[0]) for b in range(vad_frame.shape[0])]
-        time_indices = [ idx if idx > 0 else 1 for idx in time_indices ]
-        time_len = torch.tensor(time_indices, device=stft.device)
-    
-        linear_spectra = stft.permute(0, 2, 3, 1)    # (B, F, T, C)
-        
-        cov_z = torch.einsum('bftc,bftd->bfcd', linear_spectra, linear_spectra.conj()) / time_len[:, None, None, None]    # (B, F, C, C)
 
-        col0 = cov_z[:, :, :, self.ref_ch]                                # (B, F, C)        
-        col00 = col0[:, :, self.ref_ch]                                   # (B, F)
-        
-        col0 = torch.cat((col0[:,:,self.ref_ch-1:self.ref_ch], col0[:,:,self.ref_ch+1:]), dim=-1)    # (B, F, C-1)
-        col00 = torch.complex(col00.real.clamp(self.eps), col00.imag.clamp(self.eps))
-        
-        pRTF = col0 / col00[:, :, None]    # (B, F, C-1)
-        pRTF = torch.cat((pRTF.real, pRTF.imag), dim=-1)    # (B, F, 2(C-1))
-
-        pRTF = pRTF.permute(0, 2, 1)    # (B, 2(C-1), F)
-
-        return pRTF
-
-
-        
-    def forward(self, mixed=None, vad=None, stft=None, vad_frame=None):
-
-        if mixed is not None and vad is not None:   # for SCL training
-            r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
-            stft = torch.complex(r, i)
-
-        pRTF = self.pseudo_RTF(stft, vad_frame)    # (B, 2(C-1), F), (B, 1, T)
-
-
-        outputs, embedding = self.crn(pRTF)   # 3 * (B, 128), (B, 256)
-        
-        
-        return outputs, embedding.squeeze(dim=-1)

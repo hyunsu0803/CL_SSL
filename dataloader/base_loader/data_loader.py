@@ -9,6 +9,7 @@ from scipy.signal import resample
 import torch
 import numpy as np
 import random
+from glob import glob
 
 
 class synth_data_loader(datamake):
@@ -58,60 +59,39 @@ class real_data_loader(datamake):
         
         self.args=args
         
-        self.ans_azi=self.args['ans_azi']
-        self.degree_resolution=self.args['degree_resolution']  
-        self.num_spk = self.args['num_spk']
+        self.csv_dir = 'STARSS23/metadata_dev/'
+        self.wav_dir = 'STARSS23/mic_dev/'
+        self.vad_dir = 'STARSS23/mic_dev_vad/'
+        self.label_dir = 'STARSS23/mic_dev_label/'
         
-        self.data_dir = self.args['data_dir']        
-        self.data_csv = pd.read_csv(self.args['data_csv'], index_col=0)
-        self.vad_dir = self.args['vad_dir']
+        self.csv_list = glob('STARSS23/metadata_dev/*/*.csv')
+
+
         
         
     def __len__(self):
-        return len(self.data_csv)
+        return len(self.csv_list)
     
     
     def  __getitem__(self, idx):
         
-        data_idx = self.data_csv.loc[idx]
-        azi_list = [int(data_idx['azimuth'])]       
-        data_name = str(data_idx['filename'])
-        
-        mixed, original_fs = sf.read(self.data_dir+data_name, dtype='float32')
+        csv_file = self.csv_list[idx]
 
-        vad_name = data_name.replace('.wav', '.npy')
-        vad = np.load(self.vad_dir + vad_name)
+        wav_file = csv_file.replace(self.csv_dir, self.wav_dir).replace('.csv', '.wav')
+        vad_file = csv_file.replace(self.csv_dir, self.vad_dir).replace('.csv', '.npy')
+        azi_file = csv_file.replace(self.csv_dir, self.label_dir).replace('.csv', '.npy')
         
-        if mixed.ndim == 1:
-            mixed = np.expand_dims(mixed, 0)
-        elif mixed.shape[0] > mixed.shape[1]:
-            mixed = mixed.T     # (4, ...)
+        mixed, fs = sf.read(wav_file, dtype='float32')
+        vad = np.load(vad_file)
+        azi = np.load(azi_file)
         
-        if vad.ndim == 1:
-            vad = np.expand_dims(vad, 0)
-        elif vad.shape[0] > vad.shape[1]:
-            vad = vad.T
             
-        
         mixed=mixed.astype('float32')
         vad=vad.astype('float32')
-        
-        samples = 8 * 44100
-        if mixed.shape[1] < samples:
-                pad = samples - mixed.shape[1]
-                
-                mixed = np.pad(mixed, ((0,0), (0, pad)), mode='constant')
-                vad = np.pad(vad, ((0,0), (0, pad)), mode='constant')
-        else:
-            start = random.randint(0, mixed.shape[1]-samples)
-            mixed = mixed[:, start:start+samples]
-            vad = vad[:, start:start+samples]
+        azi=azi.astype('float32')
         
         
-        # does nothing but changes them into torch tensor when 'ans_azi'== 0
-        vad, azi_list = self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)   
-        
-        return torch.from_numpy(mixed), vad, azi_list, self.num_spk, data_name
+        return torch.from_numpy(mixed), torch.from_numpy(vad), torch.from_numpy(azi)
 
 
         

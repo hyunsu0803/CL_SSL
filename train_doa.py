@@ -9,6 +9,7 @@ import wandb
 from tqdm import tqdm
 from dataloader.wrap_dataload import Train_dataload_for_doa, Synth_dataload, Real_dataload
 import pandas as pd
+import gc
 
 
 
@@ -53,7 +54,6 @@ class Hyparam_set():
 class Learner_config():
     def __init__(self, args) -> None:
         self.args=args
-        self.scaler = torch.cuda.amp.GradScaler()   # mixed precision
 
     def memory_delete(self, *args):
         for a in args:
@@ -67,7 +67,10 @@ class Learner_config():
 
         model_dir=importlib.import_module(model_import)
         
-        self.args['model']['CRN']['input_cnn_channel'] = 1
+        if self.args['hyparam']['SCL']:
+            self.args['model']['CRN']['input_cnn_channel'] = 1
+        else:
+            self.args['model']['CRN']['input_cnn_channel'] = 6
         self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
 
         if self.args['hyparam']['finetune']:
@@ -281,7 +284,7 @@ class Dataloader_config():
     def config(self):
 
         self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 32
-        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 8
+        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 1
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
         self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 1
         self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/doa/'
@@ -334,6 +337,7 @@ class Trainer():
 
         self.model.train()
 
+        torch.cuda.empty_cache()
         
         for iter_num, (mixed, vad, speech_azi, speech_ele, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
                 
@@ -349,14 +353,17 @@ class Trainer():
 
             self.logger.train_iter_log(loss)
             self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, _, out, loss, target, vad_block])
-            
+            gc.collect()
         
         
         self.logger.train_epoch_log()
 
  
     def validation(self, epoch):
+
         self.model.eval()
+
+        torch.cuda.empty_cache()
         
         
         with torch.no_grad():
@@ -379,9 +386,12 @@ class Trainer():
                     
                 self.logger.test_iter_log(loss)
                 self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target, vad_block])
+                gc.collect()
              
+            
             self.logger.test_epoch_log(self.optimizer_scheduler)
             
+
 
 if __name__=='__main__':
     args=sys.argv[1:]

@@ -1,9 +1,8 @@
 from .FFT import ConvSTFT 
+from .prepro import Prepro
 from torch import nn
 import torch
-# from util import *
 import numpy as np
-import librosa
 import importlib
 
 
@@ -144,7 +143,11 @@ class main_model_for_doa(nn.Module):
 
         self.use_scl=self.hyparam['SCL']
         self.finetune=self.hyparam['finetune']
-        self.config['CRN']['input_mapping_dim'] = 1024
+
+        if self.use_scl:
+            self.config['CRN']['input_mapping_dim'] = 1024
+        else:
+            self.config['CRN']['input_mapping_dim'] = 512
 
         
         self.eps=np.finfo(np.float32).eps
@@ -154,22 +157,11 @@ class main_model_for_doa(nn.Module):
 
         self.p=torch.tensor(self.config['p'])
         self.sigma=torch.tensor(self.config['sigma_start'])
-        self.sigma_max=torch.tensor(self.config['sigma_end']['max'])
-        self.sigma_min=torch.tensor(self.config['sigma_end']['min'])
-        self.sigma_rate=torch.tensor(self.config['sigma_rate'])
-        self.sigma_update_method=self.config['sigma_update_method']
-        
-        self.iteration_count=0        
-        self.epoch_count=0
-        self.now_epoch=0
-
-        ######
-       
         self.degree_resolution = self.config['degree_resolution']
         self.azi_size=360//self.degree_resolution
 
         self.stft_model=ConvSTFT(**self.config['FFT'])
-        
+        self.prepro=Prepro(self.stft_model)
         self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
         
         self.model_select_for_scl_feature()     # self.scl_model
@@ -196,7 +188,7 @@ class main_model_for_doa(nn.Module):
     def make_target(self, vad_block, azi):
 
         # vad_block : (B, 1, block_num)
-        # azi : (B, 1)
+        # azi : (B, 1, block_num)
         
         azi_target=torch.div(azi, 360//self.azi_size, rounding_mode='floor').long()        
         azi_range=torch.arange(0, self.azi_size).unsqueeze(0).to(azi_target.device)
@@ -224,10 +216,10 @@ class main_model_for_doa(nn.Module):
         return target.squeeze(dim=2) # (B, 3, 360, block_num)
 
     
-    def pseudo_RTF(self, mixed=None, vad=None, stft=None, vad_frame=None):
+    def pseudo_RTF(self, stft, vad_frame):
         
-        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)     # vad_frame : (B, 1, 501)
-        stft = torch.complex(r, i)  # B x C x F x T
+        # r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)     # vad_frame : (B, 1, 501)
+        # stft = torch.complex(r, i)  # B x C x F x T
         
         time_indices = [len(torch.nonzero(vad_frame[b, 0] == 1, as_tuple=True)[0]) for b in range(vad_frame.shape[0])]
         time_indices = [ idx if idx > 0 else 1 for idx in time_indices ]
@@ -248,10 +240,13 @@ class main_model_for_doa(nn.Module):
 
         pRTF = pRTF.permute(0, 2, 1)    # (B, 2(C-1), F)
 
-        return pRTF, vad_frame
+        return pRTF
 
         
-    def forward(self, mixed, vad, azi):
+    def forward(self, mixed, vad, azi_list):
+
+        # mixed = mixed.permute(0, 2, 1)
+        # vad = vad.permute(0, 2, 1)
 
         r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
         stft = torch.complex(r, i)      # B x C x F x T
@@ -273,10 +268,13 @@ class main_model_for_doa(nn.Module):
         block_vad_frame = block_vad_frame.permute(0, 2, 1, 3).reshape(-1, block_vad_frame.shape[1], block_size) # (B*block_num, 1, block_size)
 
 
-        ############# extract embedding
-        z, embedding = self.scl_model(stft=block_stft, vad_frame=block_vad_frame)   # (B*block_num, 128) (B*block_num, 256)
-        embedding = embedding.unsqueeze(dim=1)     # (B*block_num, 1, 256)
-        
+        if self.use_scl:
+            ############# extract embedding
+            z, embedding = self.scl_model(stft=block_stft, vad_frame=block_vad_frame)   # (B*block_num, 128) (B*block_num, 256)
+            embedding = embedding.unsqueeze(dim=1)     # (B*block_num, 1, 256)
+        else:
+            embedding = block_stft
+
 
         ############# DOA estimation
         out=self.crn(embedding)   # (B*block_num, 3, 360)
@@ -290,7 +288,7 @@ class main_model_for_doa(nn.Module):
         vad_block = vad_block.unsqueeze(dim=1)   # (B, 1, block_num)
 
         # azi : (B, 1)
-        target=self.make_target(vad_block, azi)   # (B, 3, 360, block_num)
+        target=self.make_target(vad_block, azi_list)   # (B, 3, 360, block_num)
 
         
         return out, target, vad_block
