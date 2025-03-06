@@ -5,19 +5,12 @@ ref_ch: 0
 
 ##### sigma
 p: 0.707106781
-wait_epoch: 0
 sigma_start: [16.0, 6.0, 2.5]
-sigma_end: 
-  min: [16.0, 6.0, 2.5]
-  max: [16.0, 6.0, 2.5]
-  # min: [0.05]
-
-sigma_rate: [-0.0, 0.0, 0.0]
 sigma_update_method: 'add'
 
-iter:
-  update: False
-  update_period: 200
+# iter:
+#   update: False
+#   update_period: 200
 
 epoch:
   update: True
@@ -32,27 +25,19 @@ FFT:
   vad_threshold: 0.6666
 
 CRN:
-
-  
   input_cnn_channel: 
-  input_mapping_dim:
-
 
   CNN:
     layer_num: 4
-    # kernel_size: [3,3] # F X T
-    kernel_size: 3
+    kernel_size: [3,3] # F X T
     filter: 64
 
     max_pool:
-      # kernel_size: [2,1]
-      # stride: [2,1]
-      kernel_size: 2
-      stride: 2
+      kernel_size: [2,1]
+      stride: [2,1]
   
   GRU:
-    # input_size: 256
-    input_size: 1024
+    input_size:
     hidden_size: 256
     num_layers: 3
     batch_first: True

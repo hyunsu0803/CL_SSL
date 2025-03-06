@@ -67,10 +67,6 @@ class Learner_config():
 
         model_dir=importlib.import_module(model_import)
         
-        if self.args['hyparam']['SCL']:
-            self.args['model']['CRN']['input_cnn_channel'] = 1
-        else:
-            self.args['model']['CRN']['input_cnn_channel'] = 6
         self.model=model_dir.get_model_for_doa(self.args['model'], self.args['model_scl'], self.args['hyparam']).to(self.device)
 
         if self.args['hyparam']['finetune']:
@@ -94,7 +90,7 @@ class Learner_config():
         
     def init_optimzer_scheduler(self, ):
 
-        self.args['learner']['optimizer_scheduler']['config']['min_lr'] = 8.0e-4
+        self.args['learner']['optimizer_scheduler']['config']['min_lr'] = 1.0e-3
 
         a=importlib.import_module('torch.optim.lr_scheduler')
         assert hasattr(a, self.args['learner']['optimizer_scheduler']['type']), "optimizer scheduler {} is not in {}".format(self.args['learner']['optimizer']['type'], 'torch')
@@ -284,9 +280,9 @@ class Dataloader_config():
     def config(self):
 
         self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 32
-        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 1
+        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 16
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
-        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 1
+        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 4
         self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/doa/'
         
         self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
@@ -331,6 +327,8 @@ class Trainer():
             self.validation(epoch)           
             
             self.logger.epoch_finish(epoch, self.model, self.optimizer)
+
+        self.learner.memory_delete([self.dataloader])
     
 
     def train(self, epoch):
@@ -346,13 +344,13 @@ class Trainer():
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
             
-            out, target, vad_block = self.model(mixed, vad, speech_azi)
+            out, target = self.model(mixed, vad, speech_azi)
             
             loss = self.learner.train_update(out, target)
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, _, out, loss, target, vad_block])
+            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, _, out, loss, target])
             gc.collect()
         
         
@@ -379,13 +377,13 @@ class Trainer():
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
                 
-                out, target, vad_block = self.model(mixed, vad, speech_azi)
+                out, target = self.model(mixed, vad, speech_azi)
                 
                 loss=self.learner.test_update(out, target)
                     
                     
                 self.logger.test_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target, vad_block])
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target])
                 gc.collect()
              
             

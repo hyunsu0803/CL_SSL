@@ -50,39 +50,40 @@ class Conv1D_Block(nn.Module):
 
 
 class crn(nn.Module):
-    def __init__(self, config, output_num, azi_size):
+    def __init__(self, config):
         super(crn, self).__init__()
 
+        self.config=config
         
-        self.output_num=output_num  
-        self.azi_size=azi_size
+        self.cnn_num=self.config['CNN']['layer_num']
+        self.kernel_size=self.config['CNN']['kernel_size']       # 3
+        self.filter_size=self.config['CNN']['filter']            # 32
 
-        
-        self.cnn_num=config['CNN']['layer_num']
-        self.kernel_size=config['CNN']['kernel_size']       # 3
-        self.filter_size=config['CNN']['filter']            # 32
-
-        self.max_pool_kernel=config['CNN']['max_pool']['kernel_size']
-        self.max_pool_stride=config['CNN']['max_pool']['stride']
-        
-        args = [config['input_cnn_channel'],  self.filter_size,   self.kernel_size]     # in_channel, out_channel, kernel size
-       
-        kwargs = {'stride': 1, 'padding': self.kernel_size // 2, 'dilation': 1}
+        self.max_pool_kernel=self.config['CNN']['max_pool']['kernel_size']
+        self.max_pool_stride=self.config['CNN']['max_pool']['stride']
 
 
         ##############################
         # CNN layer
         ##############################
+        kwargs = {'stride': 1, 'padding': [1, 2], 'dilation': 1}
+        args = [self.config['input_cnn_channel'],  self.filter_size,   self.kernel_size]
+
         self.cnn=nn.ModuleList()
         self.pooling=nn.ModuleList()
-        self.cnn.append(Conv1D_Block(*args, **kwargs))       # (2*2*(C-1), 32, 3)
-        self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
+        self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))       
+        self.pooling.append(nn.MaxPool2d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
         
-        args[0]=config['CNN']['filter']                             # (64, 32, 3)   
+        args[0]=self.config['CNN']['filter']                               
         for count in range(self.cnn_num-1):
-            self.cnn.append(Conv1D_Block(*args, **kwargs))   
-            self.pooling.append(nn.MaxPool1d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
+            self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))   
+            self.pooling.append(nn.MaxPool2d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
     
+
+        self.GRU_layer=nn.GRU(**config['GRU'])
+        self.h0=torch.zeros(*config['GRU_init']['shape'])
+        self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
+
 
         ##############################
         # output layer
@@ -91,33 +92,39 @@ class crn(nn.Module):
         self.azi_mapping_final=nn.ModuleList()
         
 
-        args = [config['input_mapping_dim'], 512, 1]
+        args = [256, 256, 1]
         kwargs['padding']=0
         
-        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (1024, 512, 1)
-        args[0]=512
-        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (512, 512, 1)
-        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (512, 512, 1)
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (256, 256, 1)
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (256, 256, 1)
+        self.azi_mapping_conv_layer.append(Conv1D_Block(*args, **kwargs))       # (256, 256, 1)
         
         args[1] = 360
-        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       # (512, 360, 1)
-        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       # (512, 360, 1)
-        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       # (512, 360, 1)
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       # (256, 360, 1)
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       # (256, 360, 1)
+        self.azi_mapping_final.append(nn.Conv1d(*args, **kwargs))       # (256, 360, 1)
 
 
     def forward(self, x):
-        # x : (B, 1, 256)
-        ##############################
-        # CNN layer
-        ##############################
+
+        # x : (B, 1, 256, n) -> (B, 64, 128, n) -> (B, 64, 64, n) -> (B, 64, 32, n) -> (B, 64, 16, n)
         for cnn_layer, pooling_layer in zip(self.cnn, self.pooling):
             x=cnn_layer(x)[...,:x.shape[-1]]
             x=pooling_layer(x)
- 
-        # x : (B, 64, 16)
-        x = x.reshape(x.shape[0], -1, 1)   # (B, 1024, 1)
+
+
+        b, c, f, n=x.shape              # (B, 64, 16, n)
+        x=x.view(b, -1, n).permute(0,2,1)   # (B, n, 64*16=1024)
         
+        h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  
+        self.GRU_layer.flatten_parameters()
         
+        x, h=self.GRU_layer(x, h0)      # (B, n, 256(hidden size))
+
+        x = x.permute(0,2,1)    # (B, 256, n)
+        
+
+
         ##############################
         # output layer
         ##############################
@@ -145,10 +152,11 @@ class main_model_for_doa(nn.Module):
         self.finetune=self.hyparam['finetune']
 
         if self.use_scl:
-            self.config['CRN']['input_mapping_dim'] = 1024
+            self.config['CRN']['input_cnn_channel'] = 1
+            self.config['CRN']['GRU']['input_size'] = 1024
         else:
-            self.config['CRN']['input_mapping_dim'] = 512
-
+            self.config['CRN']['input_cnn_channel'] = 6
+            self.config['CRN']['GRU']['input_size'] = 512
         
         self.eps=np.finfo(np.float32).eps
         self.ref_ch=self.config['ref_ch']
@@ -162,7 +170,7 @@ class main_model_for_doa(nn.Module):
 
         self.stft_model=ConvSTFT(**self.config['FFT'])
         self.prepro=Prepro(self.stft_model)
-        self.crn=crn(self.config['CRN'], self.sigma.shape[0], self.azi_size)
+        self.crn=crn(self.config['CRN'])
         
         self.model_select_for_scl_feature()     # self.scl_model
        
@@ -208,89 +216,31 @@ class main_model_for_doa(nn.Module):
 
         labelling=torch.exp(kappa_d*(torch.cos(ang_diff)-1)).unsqueeze(-1) # (B, 3, num_spk, 360, 1)  
         
-        # (B, 1, block_num) -> (B, 1, 1, 1, block_num)
-        vad_block=vad_block.unsqueeze(1).unsqueeze(-2)
+        # (B, n) -> (B, 1, 1, 1, n)
+        vad_block=vad_block[:, None, None, None, :]
         
         target = labelling*vad_block   # (B, 3, num_spk, 360, block_num)
        
         return target.squeeze(dim=2) # (B, 3, 360, block_num)
 
-    
-    def pseudo_RTF(self, stft, vad_frame):
-        
-        # r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)     # vad_frame : (B, 1, 501)
-        # stft = torch.complex(r, i)  # B x C x F x T
-        
-        time_indices = [len(torch.nonzero(vad_frame[b, 0] == 1, as_tuple=True)[0]) for b in range(vad_frame.shape[0])]
-        time_indices = [ idx if idx > 0 else 1 for idx in time_indices ]
-        time_len = torch.tensor(time_indices, device=stft.device)
-    
-        linear_spectra = stft.permute(0, 2, 3, 1)    # (B, F, T, C)
-        
-        cov_z = torch.einsum('bftc,bftd->bfcd', linear_spectra, linear_spectra.conj()) / time_len[:, None, None, None]    # (B, F, C, C)
-
-        col0 = cov_z[:, :, :, self.ref_ch]                                # (B, F, C)        
-        col00 = col0[:, :, self.ref_ch]                                   # (B, F)
-        
-        col0 = torch.cat((col0[:,:,self.ref_ch-1:self.ref_ch], col0[:,:,self.ref_ch+1:]), dim=-1)    # (B, F, C-1)
-        col00 = torch.complex(col00.real.clamp(self.eps), col00.imag.clamp(self.eps))
-        
-        pRTF = col0 / col00[:, :, None]    # (B, F, C-1)
-        pRTF = torch.cat((pRTF.real, pRTF.imag), dim=-1)    # (B, F, 2(C-1))
-
-        pRTF = pRTF.permute(0, 2, 1)    # (B, 2(C-1), F)
-
-        return pRTF
-
         
     def forward(self, mixed, vad, azi_list):
 
-        # mixed = mixed.permute(0, 2, 1)
-        # vad = vad.permute(0, 2, 1)
-
-        r, i, vad_frame =self.stft_model(mixed, vad, cplx=True)
-        stft = torch.complex(r, i)      # B x C x F x T
-        B, C, F, T = stft.shape
-
-
-        ############ split into blocks
-        frame_num = stft.shape[-1]
-        block_size = 24
-        block_num = frame_num // block_size
-        if frame_num % block_size != 0:
-            stft = stft[..., :block_size*block_num]
-            vad_frame = vad_frame[..., :block_size*block_num]
-
-        block_stft = stft.reshape(B, C, F, block_num, block_size)   # (B, C, F, block_num, block_size)
-        block_stft = block_stft.permute(0, 3, 1, 2, 4).reshape(-1, C, F, block_size)    # (B*block_num, C, F, block_size)
-
-        block_vad_frame = vad_frame.reshape(B, vad_frame.shape[1], block_num, block_size)  # (B, 1, block_num, block_size)
-        block_vad_frame = block_vad_frame.permute(0, 2, 1, 3).reshape(-1, block_vad_frame.shape[1], block_size) # (B*block_num, 1, block_size)
-
+        block_stft, block_vad_frame = self.prepro.make_block(mixed, vad)
+        ibRTF, vad_block = self.prepro.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, n)
 
         if self.use_scl:
-            ############# extract embedding
-            z, embedding = self.scl_model(stft=block_stft, vad_frame=block_vad_frame)   # (B*block_num, 128) (B*block_num, 256)
-            embedding = embedding.unsqueeze(dim=1)     # (B*block_num, 1, 256)
+            z, embedding, azi_list = self.scl_model(mixed, vad, azi_list)
+            embedding = embedding.unsqueeze(1)   # (B, 1, 256, n)
         else:
-            embedding = block_stft
+            embedding = ibRTF   # (B, 2(C-1), F, n)
 
 
-        ############# DOA estimation
-        out=self.crn(embedding)   # (B*block_num, 3, 360)
-        out=out.reshape(B, block_num, 3, 360).permute(0, 2, 3, 1)   # (B, 3, 360, block_num)
+        out=self.crn(embedding) # (B, 3, 360, n)
 
-
-        ############# make target
-        vad_block = block_vad_frame.reshape(B, block_num, -1)   # (B, block_num, block_size)
-        count_active_frame = torch.sum(vad_block==1, dim=-1)   # (B, block_num)
-        vad_block = (count_active_frame > block_size//2).int()    # (B, block_num)
-        vad_block = vad_block.unsqueeze(dim=1)   # (B, 1, block_num)
-
-        # azi : (B, 1)
-        target=self.make_target(vad_block, azi_list)   # (B, 3, 360, block_num)
+        target=self.make_target(vad_block, azi_list)   # (B, 3, 360, n)
 
         
-        return out, target, vad_block
+        return out, target
 
 
