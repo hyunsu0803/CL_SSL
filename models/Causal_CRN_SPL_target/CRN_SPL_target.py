@@ -195,23 +195,22 @@ class main_model_for_doa(nn.Module):
 
     def make_target(self, vad_block, azi):
 
-        # vad_block : (B, 1, block_num)
-        # azi : (B, 1, block_num)
+        # vad_block : (B, n)
+        # azi : (B, 1)
         
-        azi_target=torch.div(azi, 360//self.azi_size, rounding_mode='floor').long()        
-        azi_range=torch.arange(0, self.azi_size).unsqueeze(0).to(azi_target.device)
+        azi_range=torch.arange(0, self.azi_size).unsqueeze(0).to(azi.device)     # (B, 360)
 
-        ang_diff=azi_target.unsqueeze(-1)*self.degree_resolution-azi_range*self.degree_resolution
+        ang_diff=azi.unsqueeze(-1)*self.degree_resolution - azi_range*self.degree_resolution   # (B, 1, 360)
         
-        distance_abs=torch.abs(ang_diff)
-        distance_abs=torch.stack((distance_abs, 360-distance_abs), dim=0)
+        distance_abs=torch.abs(ang_diff)    # (B, 1, 360)
+        distance_abs=torch.stack((distance_abs, 360-distance_abs), dim=0)   # (2, B, 1, 360)
      
-        ang_diff=torch.min(distance_abs, dim=0).values
-        ang_diff=torch.deg2rad(ang_diff).unsqueeze(1)
+        ang_diff=torch.min(distance_abs, dim=0).values  # (B, 1, 360)
+        ang_diff=torch.deg2rad(abs(ang_diff)).unsqueeze(1)   # (B, 1, 1, 360)
         
-        sigma=self.sigma.view(1,-1, 1,1).to(ang_diff.device)
-        sigma=torch.deg2rad(sigma)
-        kappa_d=torch.log(self.p)/(torch.cos(sigma)-1)
+        sigma=self.sigma.view(1,-1, 1,1).to(ang_diff.device)    # (1, 3, 1, 1)
+        sigma=torch.deg2rad(sigma)                              # (1, 3, 1, 1)
+        kappa_d=torch.log(self.p)/(torch.cos(sigma)-1)          # (1, 3, 1, 1)
         
 
         labelling=torch.exp(kappa_d*(torch.cos(ang_diff)-1)).unsqueeze(-1) # (B, 3, num_spk, 360, 1)  

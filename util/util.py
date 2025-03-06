@@ -121,16 +121,16 @@ def randomseed_init(num):
     else:
         return 'cpu'
 
-def draw_result_pic(dir, epoch, train, val):
+def draw_result_pic(dir, epoch, train, val, title):
     fig1 = plt.figure(figsize=(7,4))
     epo = np.arange(epoch+1)
    
     os.makedirs(os.path.dirname(dir), exist_ok=True)
     a2 = fig1.add_subplot(1, 1, 1)
     a2.plot(epo, train, epo,val)
-    a2.set_title("Loss")
+    a2.set_title(title)
     a2.legend(['Train', 'Eval'])
-    a2.set_ylabel('Loss')
+    a2.set_ylabel(title)
     a2.set_xlabel('Epochs')
     a2.grid(axis='y', linestyle='dashed')
     fig1.tight_layout()

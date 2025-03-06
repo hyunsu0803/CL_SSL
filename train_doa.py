@@ -168,35 +168,87 @@ class Learner_config():
 class Logger_config():
     def __init__(self, args) -> None:
         self.args=args
-        self.csv=dict()
-        self.csv['train_epoch_loss']=[]
-        self.csv['train_best_loss']=[]
-        self.csv['test_epoch_loss']=[]
-        self.csv['test_best_loss']=[]
+        self.csv_loss=dict()
+        self.csv_loss['train_epoch_loss']=[]
+        self.csv_loss['train_best_loss']=[]
+        self.csv_loss['test_epoch_loss']=[]
+        self.csv_loss['test_best_loss']=[]
 
-        self.csv_dir=self.args['logger']['save_csv']
+        self.csv_mae=dict()
+        self.csv_mae['train_epoch_mae']=[]
+        self.csv_mae['train_best_mae']=[]
+        self.csv_mae['test_epoch_mae']=[]
+        self.csv_mae['test_best_mae']=[]
+
+        self.csv_acc=dict()
+        self.csv_acc['train_epoch_acc']=[]
+        self.csv_acc['train_best_acc']=[]
+        self.csv_acc['test_epoch_acc']=[]
+        self.csv_acc['test_best_acc']=[]
+
+        self.csv_loss_dir=self.args['logger']['loss_csv']
+        self.csv_acc_dir=self.args['logger']['acc_csv']
+        self.csv_mae_dir=self.args['logger']['mae_csv']
         self.model_save_dir=self.args['logger']['model_save_dir']
-        self.png_dir=self.args['logger']['png_dir']
+
+        self.loss_png_dir=self.args['logger']['loss_png_dir']
+        self.acc_png_dir=self.args['logger']['acc_png_dir']
+        self.mae_png_dir=self.args['logger']['mae_png_dir']
 
         if self.args['logger']['optimize_method']=='min':
-            self.best_test_loss=math.inf
-            self.best_train_loss=math.inf
+            self.best_test_loss = math.inf
+            self.best_train_loss = math.inf
+            self.best_test_acc = -math.inf
+            self.best_train_acc = -math.inf
+            self.best_test_mae = math.inf
+            self.best_train_mae = math.inf
         else:
-            self.best_test_loss=-math.inf
-            self.best_train_loss=-math.inf
+            self.best_test_loss = -math.inf
+            self.best_train_loss = -math.inf
+            self.best_test_acc = math.inf
+            self.best_train_acc = math.inf
+            self.best_test_mae = -math.inf
+            self.best_train_mae = -math.inf
 
-    def train_iter_log(self, loss):
+
+###############################################
+# train log
+###############################################
+    def train_iter_loss_log(self, loss):
         try:
             wandb.log({'train_iter_loss':loss})
         except:
             None
         self.epoch_train_loss.append(loss.cpu().detach().item())
 
+    def train_iter_metric_log(self, out, target, speech_azi):
+
+        out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, n)           
+        target=target.cpu().numpy()                 
+        speech_azi=speech_azi.cpu().numpy()         # (B, 1)
+
+        output_azi = out[0,2].argmax(axis=0)        # (n, )
+        vad_bool = target[0,2].sum(axis=0) > 0     # (n, )
+        ans_azi = speech_azi[0,0]                   # (1, )
+
+
+        error = abs(output_azi - ans_azi)
+        error = np.minimum(error, 360-error)
+
+        for i, vad in enumerate(vad_bool):
+            if vad:
+
+                self.save_train_config_dict['total_error_sum'] += error[i]
+                self.save_train_config_dict['number_of_blocks'] += 1
+
+                if error[i] <= 10:
+                    self.save_train_config_dict['acc_10'] += 1
+
        
-    def train_epoch_log(self):
+    def train_epoch_loss_log(self):
         loss_mean=np.array(self.epoch_train_loss).mean()
 
-        self.csv['train_epoch_loss'].append(loss_mean)
+        self.csv_loss['train_epoch_loss'].append(loss_mean)
 
         if self.best_train_loss > loss_mean:
             self.best_train_loss = loss_mean 
@@ -207,44 +259,145 @@ class Logger_config():
         except:
             None
 
-        self.csv['train_best_loss'].append(self.best_train_loss)
+        self.csv_loss['train_best_loss'].append(self.best_train_loss)
+
+    def train_epoch_metric_log(self,):
+
+        acc_10 = self.save_train_config_dict['acc_10'] / self.save_train_config_dict['number_of_blocks']
+        mae = self.save_train_config_dict['total_error_sum'] / self.save_train_config_dict['number_of_blocks']
+
+        self.csv_acc['train_epoch_acc'].append(acc_10)
+        self.csv_mae['train_epoch_mae'].append(mae)
+
+        if self.best_train_acc < acc_10:
+            self.best_train_acc = acc_10
+        if self.best_train_mae > mae:
+            self.best_train_mae = mae
+
+        try:
+            wandb.log({'train_epoch_acc':acc_10})
+            wandb.log({'train_best_acc':self.best_train_acc})
+            wandb.log({'train_epoch_mae':mae})
+            wandb.log({'train_best_mae':self.best_train_mae})
+        except:
+            None
+
+        self.csv_acc['train_best_acc'].append(self.best_train_acc)
+        self.csv_mae['train_best_mae'].append(self.best_train_mae)
 
 
-    def test_iter_log(self, loss):
+
+###############################################
+# test log
+###############################################
+
+    def test_iter_loss_log(self, loss):
         try:
             wandb.log({'test_iter_loss':loss})
         except:
             None
         self.epoch_test_loss.append(loss.cpu().detach().item())
 
+    def test_iter_metric_log(self, out, target, speech_azi):
+        
+        out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, n)           
+        target=target.cpu().numpy()                 
+        speech_azi=speech_azi.cpu().numpy()         # (B, 1)
 
-    def test_epoch_log(self, optimizer_scheduler):
+        output_azi = out[0,2].argmax(axis=0)        # (n, )
+        vad_bool = target[0,2].sum(axis=0) > 0     # (n, )
+        ans_azi = speech_azi[0,0]                   # (1, )
+
+
+        error = abs(output_azi - ans_azi)
+        error = np.minimum(error, 360-error)
+
+        for i, vad in enumerate(vad_bool):
+            if vad:
+
+                self.save_test_config_dict['total_error_sum'] += error[i]
+                self.save_test_config_dict['number_of_blocks'] += 1
+
+                if error[i] <= 10:
+                    self.save_test_config_dict['acc_10'] += 1
+
+
+    def test_epoch_loss_log(self, optimizer_scheduler):
         loss_mean=np.array(self.epoch_test_loss).mean()
-        self.csv['test_epoch_loss'].append(loss_mean)
+        self.csv_loss['test_epoch_loss'].append(loss_mean)
 
-        self.model_save=False
+        self.model_save_loss=False
         if self.best_test_loss > loss_mean:
-            self.model_save=True
+            self.model_save_loss=True
             self.best_test_loss = loss_mean 
         try:
             wandb.log({'test_epoch_loss':loss_mean})
             wandb.log({'test_best_loss':self.best_test_loss})
         except:
             None
-        self.csv['test_best_loss'].append(self.best_test_loss)
+        self.csv_loss['test_best_loss'].append(self.best_test_loss)
 
         optimizer_scheduler.step(loss_mean)
+
+    def test_epoch_metric_log(self,):
+
+        acc_10 = self.save_test_config_dict['acc_10'] / self.save_test_config_dict['number_of_blocks']
+        mae = self.save_test_config_dict['total_error_sum'] / self.save_test_config_dict['number_of_blocks']
+
+        self.csv_acc['test_epoch_acc'].append(acc_10)
+        self.csv_mae['test_epoch_mae'].append(mae)
+
+        self.model_save_acc = False
+        if self.best_test_acc < acc_10:
+            self.best_test_acc = acc_10
+            self.model_save_acc = True
+
+        self.model_save_mae = False
+        if self.best_test_mae > mae:
+            self.best_test_mae = mae
+            self.model_save_mae = True
+
+        try:
+            wandb.log({'test_epoch_acc':acc_10})
+            wandb.log({'test_best_acc':self.best_test_acc})
+            wandb.log({'test_epoch_mae':mae})
+            wandb.log({'test_best_mae':self.best_test_mae})
+        except:
+            None
+
+        self.csv_acc['test_best_acc'].append(self.best_test_acc)
+        self.csv_mae['test_best_mae'].append(self.best_test_mae)
         
+
+
+###############################################
+# epoch init, finish
+###############################################
 
     def epoch_init(self,):
         self.epoch_train_loss=[]
         self.epoch_test_loss=[]
+
+        self.save_train_config_dict=dict()
+        self.save_train_config_dict['acc_10']=0
+        self.save_train_config_dict['total_error_sum']=0
+        self.save_train_config_dict['number_of_blocks']=0
+
+        self.save_test_config_dict=dict()
+        self.save_test_config_dict['acc_10']=0
+        self.save_test_config_dict['total_error_sum']=0
+        self.save_test_config_dict['number_of_blocks']=0
     
 
     def epoch_finish(self, epoch, model, optimizer):
     
-        os.makedirs(os.path.dirname(self.csv_dir), exist_ok=True)
-        pd.DataFrame(self.csv).to_csv(self.csv_dir)
+        os.makedirs(os.path.dirname(self.csv_loss_dir), exist_ok=True)
+        os.makedirs(os.path.dirname(self.csv_acc_dir), exist_ok=True)
+        os.makedirs(os.path.dirname(self.csv_mae_dir), exist_ok=True)
+
+        pd.DataFrame(self.csv_loss).to_csv(self.csv_loss_dir)
+        pd.DataFrame(self.csv_mae).to_csv(self.csv_mae_dir)
+        pd.DataFrame(self.csv_acc).to_csv(self.csv_acc_dir)
 
         checkpoint = {
                 'epoch': epoch,
@@ -252,15 +405,27 @@ class Logger_config():
                 'optimizer': optimizer.state_dict()
             }
 
-        os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
-        if self.model_save:
-            os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
-            torch.save(checkpoint, self.model_save_dir + "best_model.tar")
-            print("new best model\n")
-        torch.save(checkpoint,  self.model_save_dir + "last_model.tar".format(epoch))
 
-        
-        util.util.draw_result_pic(self.png_dir, epoch, self.csv['train_epoch_loss'],  self.csv['test_epoch_loss'])
+        if self.model_save_loss:
+            os.makedirs(os.path.dirname(self.model_save_dir + "best_loss_model.tar"), exist_ok=True)
+            torch.save(checkpoint, self.model_save_dir + "best_loss_model.tar")
+            print("new best model - loss\n")
+
+        if self.model_save_mae:
+            os.makedirs(os.path.dirname(self.model_save_dir + "best_mae_model.tar"), exist_ok=True)
+            torch.save(checkpoint, self.model_save_dir + "best_mae_model.tar")
+            print("new best model - mae\n")
+
+        if self.model_save_acc:
+            os.makedirs(os.path.dirname(self.model_save_dir + "best_acc_model.tar"), exist_ok=True)
+            torch.save(checkpoint, self.model_save_dir + "best_acc_model.tar")
+            print("new best model - acc\n")
+
+
+        torch.save(checkpoint,  self.model_save_dir + "last_model.tar".format(epoch))
+        util.util.draw_result_pic(self.loss_png_dir, epoch, self.csv_loss['train_epoch_loss'],  self.csv_loss['test_epoch_loss'], 'loss')
+        util.util.draw_result_pic(self.acc_png_dir, epoch, self.csv_acc['train_epoch_acc'],  self.csv_acc['test_epoch_acc'], 'Acc')
+        util.util.draw_result_pic(self.mae_png_dir, epoch, self.csv_mae['train_epoch_mae'],  self.csv_mae['test_epoch_mae'], 'MAE')
 
 
     def wandb_config(self):
@@ -279,10 +444,10 @@ class Dataloader_config():
         
     def config(self):
 
-        self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 32
+        self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 64
         self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 16
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
-        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 4
+        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 8
         self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/doa/'
         
         self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
@@ -349,12 +514,15 @@ class Trainer():
             loss = self.learner.train_update(out, target)
                 
 
-            self.logger.train_iter_log(loss)
+            self.logger.train_iter_loss_log(loss)
+            self.logger.train_iter_metric_log(out, target, speech_azi)
+
             self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, _, out, loss, target])
             gc.collect()
         
         
-        self.logger.train_epoch_log()
+        self.logger.train_epoch_loss_log()
+        self.logger.train_epoch_metric_log()
 
  
     def validation(self, epoch):
@@ -382,12 +550,15 @@ class Trainer():
                 loss=self.learner.test_update(out, target)
                     
                     
-                self.logger.test_iter_log(loss)
+                self.logger.test_iter_loss_log(loss)
+                self.logger.test_iter_metric_log(out, target, speech_azi)
+
                 self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target])
                 gc.collect()
              
             
-            self.logger.test_epoch_log(self.optimizer_scheduler)
+            self.logger.test_epoch_loss_log(self.optimizer_scheduler)
+            self.logger.test_epoch_metric_log()
             
 
 

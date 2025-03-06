@@ -6,6 +6,7 @@ import random
 import importlib
 from tqdm import tqdm
 from dataloader.wrap_dataload import Synth_dataload, Real_dataload
+import matplotlib.pyplot as plt
 
 
 class Hyparam_set():
@@ -146,37 +147,36 @@ class Logger_config():
             f.write(str(macro_recall))
 
     
-    def error_update(self, output_azi, ans_azi, vad_block):
+    def error_update(self, output_azi, ans_azi, vad_bool):
 
         # output_azi : (block_num)
-        # ans_azi : (1)
         # vad_block : (block_num)
+        # ans_azi : (1)
 
         error = abs(output_azi - ans_azi)
         error = np.minimum(error, 360-error)
 
-        for i in range(len(vad_block)):
-            if vad_block[i] == 0:
-                continue
+        for i, vad in enumerate(vad_bool):
+            if vad:
 
-            self.save_config_dict['total_error_sum'] += error[i]
-            self.save_config_dict['number_of_degrees'] += 1
+                self.save_config_dict['total_error_sum'] += error[i]
+                self.save_config_dict['number_of_degrees'] += 1
 
-            e = error[i]
+                e = error[i]
 
-            if e <= 10:
-                self.save_config_dict['confusion_matrix'][str(ans_azi)]['TP'] += 1
-            else:
-                self.save_config_dict['confusion_matrix'][str(ans_azi)]['FN'] += 1
-                self.save_config_dict['confusion_matrix'][str(output_azi[i])]['FP'] += 1
+                if e <= 10:
+                    self.save_config_dict['confusion_matrix'][str(ans_azi)]['TP'] += 1
+                else:
+                    self.save_config_dict['confusion_matrix'][str(ans_azi)]['FN'] += 1
+                    self.save_config_dict['confusion_matrix'][str(output_azi[i])]['FP'] += 1
 
 
-            if e <= 1:
-                self.save_config_dict['acc_1'] += 1
-            if e <= 5:
-                self.save_config_dict['acc_5'] += 1
-            if e <= 10:
-                self.save_config_dict['acc_10'] += 1
+                if e <= 1:
+                    self.save_config_dict['acc_1'] += 1
+                if e <= 5:
+                    self.save_config_dict['acc_5'] += 1
+                if e <= 10:
+                    self.save_config_dict['acc_10'] += 1
                 
 
   
@@ -248,84 +248,55 @@ class Tester():
                 # speech_azi : (1, 1)
                 # num_spk : (1)
                 # vad : (1, 1, 64000)
-                for iter_num, (mixedd, vadd, speech_azi) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
-                    import soundfile as sf
-                    mixed, fs = sf.read('STARSS23/mic_dev_downsampled/dev-train-sony/fold3_room21_mix022.wav')
-                    vad = np.load('STARSS23/mic_dev_vad/dev-train-sony/fold3_room21_mix022.npy')
-                    azi = np.load('STARSS23/mic_dev_label/dev-train-sony/fold3_room21_mix022.npy')
+                for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
+                    # import soundfile as sf
+                    # mixed, fs = sf.read('STARSS23/mic_dev_downsampled/dev-train-sony/fold3_room21_mix022.wav')
+                    # vad = np.load('STARSS23/mic_dev_vad/dev-train-sony/fold3_room21_mix022.npy')
+                    # azi = np.load('STARSS23/mic_dev_label/dev-train-sony/fold3_room21_mix022.npy')
 
-                    mixed = torch.tensor(mixed)
-                    vad = torch.tensor(vad)
-                    speech_azi = torch.tensor(azi)
+                    # mixed = torch.tensor(mixed)
+                    # vad = torch.tensor(vad)
+                    # speech_azi = torch.tensor(speech_azi)
 
                     mixed=mixed.to(self.hyperparameter.device)
                     vad=vad.to(self.hyperparameter.device)
                     speech_azi=speech_azi.to(self.hyperparameter.device)
     
 
-                    out, target, vad_block = self.model(mixed, vad, speech_azi)
+                    out, target = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n)
 
-                    out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot                    
-                    target=target.cpu().numpy()                 # (B, 3, 360, 501) for speech, (B, 3, 360) for gunshot
-                    vad_block=vad_block.cpu().numpy()
+                    out=out.sigmoid().detach().cpu().numpy()                        
+                    target=target.cpu().numpy()                 
                     speech_azi=speech_azi.cpu().numpy()         # (B, 1)
-                    mixed=mixed.cpu().numpy()                   # (B, 4, 64000)
 
 
-                    output_azi = out[0,2].argmax(axis=0)    # (block_num, )
-                    ans_azi = speech_azi[0,0]
+                    output_azi = out[0,2].argmax(axis=0)        # (n, )
+                    vad_bool = target[0,2].sum(axis=0) > 0     # (n, )
+                    ans_azi = speech_azi[0,0]                   # (1, )
                     
                     
-                    # pkl_idx=pkl_idx[0]
-                    # pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
-                    
-                    # ### save as polar histogram
-                    # duration = int(mixed.shape[2] / 44100 * 10) / 10 # in seconds
-                    
-                    # histogram = self.utils.polar_histogram(out)
-                    # plt.title('Sniper azimuth : '+str(speech_azi.item()) + ' / Duration : ' + str(duration) + 's')  
-                    # os.makedirs('/root/mydir/results/pngs/', exist_ok=True)
-                    # plt.savefig('/root/mydir/results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=300)
-                    # plt.close()         
-                    # # exit()
-                    
+                    pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
                     
                     # ## save as png
-                    # plt.figure()
-                    # plt.subplot(2,1,1)
-                    # plt.imshow(out[0,2], aspect='auto', vmin=0.0, vmax=1.0)
-                    # plt.xlabel('Time frame')
-                    # plt.ylabel('Source angle')
-                    # plt.title('Estimated DOA spatial spectrum')
-                    # plt.subplot(2,1,2)
-                    # plt.imshow(target[0,2], aspect='auto', vmin=0.0, vmax=1.0)
-                    # plt.xlabel('Time frame')
-                    # plt.ylabel('Source angle')
-                    # plt.title('Target DOA spatial spectrum')
-                    # os.makedirs('/root/clssl/results/pngs/', exist_ok=True)
-                    # plt.tight_layout()
-                    # plt.savefig('/root/clssl/results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
-                    # plt.close()
+                    plt.figure()
+                    plt.subplot(2,1,1)
+                    plt.imshow(out[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
+                    plt.xlabel('Time frame')
+                    plt.ylabel('Source angle')
+                    plt.title('Estimated DOA spatial spectrum')
+                    plt.subplot(2,1,2)
+                    plt.imshow(target[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
+                    plt.xlabel('Time frame')
+                    plt.ylabel('Source angle')
+                    plt.title('Target DOA spatial spectrum')
+                    os.makedirs('./results/pngs/', exist_ok=True)
+                    plt.tight_layout()
+                    plt.savefig('./results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
+                    plt.close()
                     
-                    ### save as wav
-                    # os.makedirs('/root/mydir/results/wavs/', exist_ok=True)
-                    # sf.write('/root/mydir/results/wavs/' + pkl_idx.split('.')[0]+ '.wav', mixed[0,0].numpy(), 44100)
+                    self.logger.error_update(output_azi, ans_azi, vad_bool)
                     
-                    ### save as spectrogram
-                    # plt.figure()
-                    # freq, times, sxx = spectrogram(mixed[0,0].numpy(), fs=44100, nperseg=1024, noverlap=512, nfft=1024)
-                    # plt.pcolormesh(times, freq, 10*np.log10(sxx), shading='gouraud')
-                    # plt.xlabel('Time (s)')
-                    # plt.ylabel('Frequency (Hz)')
-                    # plt.title('Mixed spectrogram')
-                    # plt.tight_layout()
-                    # os.makedirs('/root/mydir/results/spectrograms/', exist_ok=True)
-                    # plt.savefig('/root/mydir/results/spectrograms/' + pkl_idx.split('.')[0]+ '.png')
-                    # plt.close()
-
-                    self.logger.error_update(output_azi, ans_azi, vad_block[0,0])
-                    
-                    self.learner.memory_delete([mixed, vad, speech_azi, out, target, vad_block])
+                    self.learner.memory_delete([mixed, vad, speech_azi, out, target])
                   
                 self.logger.save_output(epoch)
 
