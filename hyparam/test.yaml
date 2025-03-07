@@ -9,7 +9,7 @@ local_maximum_distance: 30
 SCL: True
 finetune: True
 
-model_for_finetune: ./results/model_checkpoint/best_model.tar
+model_for_finetune: ./results/model_checkpoint/best_acc_model.tar
 
 result_folder: 
   room_type: ['evaluation']

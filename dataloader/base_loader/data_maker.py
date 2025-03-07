@@ -238,7 +238,7 @@ class base_data_maker(datamake):
         num_spk=random.randint(1, self.max_num_people) 
         
         
-        rirs, azi_list, ele_list = self.rir_maker.create_rir(num_spk=num_spk, 
+        rirs, azi_list, ele_list, rt60 = self.rir_maker.create_rir(num_spk=num_spk, 
                                                 with_coherent_noise=with_coherent_noise, 
                                                 mic_type=self.args['mic_type'], 
                                                 mic_num=self.args['mic_num'],
@@ -328,7 +328,7 @@ class base_data_maker(datamake):
         # vad & azi_list == torch.tensor
         vad, azi_list=self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)
         
-        return torch.from_numpy(mixed), vad, azi_list, torch.tensor(ele_list), white_noise_snr#, torch.from_numpy(s_clean)
+        return torch.from_numpy(mixed), vad, azi_list, torch.tensor(ele_list), coherent_noise_snr, rt60
     
     def arrange_data(self, idx):
         azimuth_deg = idx
@@ -394,7 +394,7 @@ class speech_data_maker_for_scl(base_data_maker):
         print('speech_csv', self.args['speech_csv'])
         print('noise_csv', self.args['noise_csv'])
         
-        self.pkl_dir = '/root/clssl/SSL_src/prepared/pkl/scl/'
+        self.pkl_dir = './SSL_src/prepared/pkl/scl/'
         os.makedirs(self.pkl_dir, exist_ok=True)
         
     
@@ -437,19 +437,20 @@ class speech_data_maker_for_doa(base_data_maker):
         print('speech_csv', self.args['speech_csv'])
         print('noise_csv', self.args['noise_csv'])
         
-        self.pkl_dir = '/root/clssl/SSL_src/prepared/pkl/doa/'
+        self.pkl_dir = './SSL_src/prepared/pkl/doa/'
         os.makedirs(self.pkl_dir, exist_ok=True)
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, ele_list, white_noise_snr = self.make_data(idx, with_coherent_noise=True)
+        mixed, vad, azi_list, ele_list, coherent_snr, rt60 = self.make_data(idx, with_coherent_noise=True)
         
         save_dict={}
-        save_dict['noisy']=mixed    # tensor
+        save_dict['mixed']=mixed    # tensor
         save_dict['vad']=vad        # tensor
         save_dict['azi']=azi_list   # tensor
         save_dict['ele']=ele_list
-        save_dict['white_noise_snr_list']=white_noise_snr  # list
+        save_dict['coherent_snr']=coherent_snr 
+        save_dict['rt60']=rt60
         
         
         pkl_name = str(idx) + '.pkl'

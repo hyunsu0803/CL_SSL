@@ -147,7 +147,7 @@ class Logger_config():
             f.write(str(macro_recall))
 
     
-    def error_update(self, output_azi, ans_azi, vad_bool):
+    def error_update(self, output_azi, ans_azi, vad_bool, coherent_snr, rt60):
 
         # output_azi : (block_num)
         # vad_block : (block_num)
@@ -177,10 +177,46 @@ class Logger_config():
                     self.save_config_dict['acc_5'] += 1
                 if e <= 10:
                     self.save_config_dict['acc_10'] += 1
+
+                
+                self.scatter_list_snr.append((coherent_snr, e))
+                self.scatter_list_rt60.append((rt60, e))
+
+
+    def scatter_error_plot(self):
+        
+        scatter_list_snr = self.scatter_list_snr
+        scatter_list_snr.sort(key=lambda x: x[0])
+
+        snr_values, error_values_snr = zip(*scatter_list_snr)
+
+        plt.figure()
+        plt.scatter(snr_values, error_values_snr, color='b', alpha=0.1, label='Data Points')
+        plt.xlabel('SNR')
+        plt.ylabel('DOA error')
+        plt.savefig(self.result_folder['inference_folder']+ self.room_type[0]+f'/scatter_snr.png', dpi=600)
+        plt.close()
+
+
+        scatter_list_rt60 = self.scatter_list_rt60
+        scatter_list_rt60.sort(key=lambda x: x[0])
+
+        rt60_values, error_values_rt60 = zip(*scatter_list_rt60)
+
+        plt.figure()
+        plt.scatter(rt60_values, error_values_rt60, color='g', alpha=0.1, label='Data Points')
+        plt.xlabel('RT60')
+        plt.ylabel('DOA error')
+        plt.savefig(self.result_folder['inference_folder']+ self.room_type[0]+f'/scatter_rt60.png', dpi=600)
+        plt.close()
+
                 
 
   
     def config(self,):
+
+        self.scatter_list_snr = []
+        self.scatter_list_rt60 = []
         
         self.save_config_dict=dict()
 
@@ -243,20 +279,8 @@ class Tester():
             self.dataloader.test_loader.dataset.room_type=str(room_type)
 
             with torch.no_grad():
-                
-                # mixed : (1, 4, 64000)
-                # speech_azi : (1, 1)
-                # num_spk : (1)
-                # vad : (1, 1, 64000)
-                for iter_num, (mixed, vad, speech_azi) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
-                    # import soundfile as sf
-                    # mixed, fs = sf.read('STARSS23/mic_dev_downsampled/dev-train-sony/fold3_room21_mix022.wav')
-                    # vad = np.load('STARSS23/mic_dev_vad/dev-train-sony/fold3_room21_mix022.npy')
-                    # azi = np.load('STARSS23/mic_dev_label/dev-train-sony/fold3_room21_mix022.npy')
 
-                    # mixed = torch.tensor(mixed)
-                    # vad = torch.tensor(vad)
-                    # speech_azi = torch.tensor(speech_azi)
+                for iter_num, (mixed, vad, speech_azi, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
 
                     mixed=mixed.to(self.hyperparameter.device)
                     vad=vad.to(self.hyperparameter.device)
@@ -278,27 +302,28 @@ class Tester():
                     pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
                     
                     # ## save as png
-                    plt.figure()
-                    plt.subplot(2,1,1)
-                    plt.imshow(out[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
-                    plt.xlabel('Time frame')
-                    plt.ylabel('Source angle')
-                    plt.title('Estimated DOA spatial spectrum')
-                    plt.subplot(2,1,2)
-                    plt.imshow(target[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
-                    plt.xlabel('Time frame')
-                    plt.ylabel('Source angle')
-                    plt.title('Target DOA spatial spectrum')
-                    os.makedirs('./results/pngs/', exist_ok=True)
-                    plt.tight_layout()
-                    plt.savefig('./results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
-                    plt.close()
+                    # plt.figure()
+                    # plt.subplot(2,1,1)
+                    # plt.imshow(out[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
+                    # plt.xlabel('Time frame')
+                    # plt.ylabel('Source angle')
+                    # plt.title('Estimated DOA spatial spectrum')
+                    # plt.subplot(2,1,2)
+                    # plt.imshow(target[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
+                    # plt.xlabel('Time frame')
+                    # plt.ylabel('Source angle')
+                    # plt.title('Target DOA spatial spectrum')
+                    # os.makedirs('./results/pngs/', exist_ok=True)
+                    # plt.tight_layout()
+                    # plt.savefig('./results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
+                    # plt.close()
                     
-                    self.logger.error_update(output_azi, ans_azi, vad_bool)
+                    self.logger.error_update(output_azi, ans_azi, vad_bool, coherent_snr, rt60)
                     
                     self.learner.memory_delete([mixed, vad, speech_azi, out, target])
                   
                 self.logger.save_output(epoch)
+                self.logger.scatter_error_plot()
 
             break
 

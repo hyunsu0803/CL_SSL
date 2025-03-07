@@ -39,17 +39,18 @@ class synth_data_loader(datamake):
         data_dict = pickle.load(pkl_file)   # torch tensors
         pkl_file.close()
         
-        mixed = data_dict['noisy'].numpy()
+        mixed = data_dict['mixed'].numpy()
         vad = data_dict['vad'].numpy()
-        # vad = np.ones_like(vad)
         azi_list = data_dict['azi'].tolist()
+        coherent_snr = data_dict['coherent_snr']
+        rt60 = data_dict['rt60']
         
         
         # does nothing when 'ans_azi'== 0
         # become torch.tensor
         vad, azi_list = self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)   
         
-        return torch.from_numpy(mixed), vad, azi_list
+        return torch.from_numpy(mixed), vad, azi_list, coherent_snr, rt60
     
     
 class real_data_loader(datamake):
