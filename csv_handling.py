@@ -2,6 +2,8 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 import os
 from glob import glob
+import pickle
+import soundfile as sf
   
     
 def edit_csv():
@@ -137,4 +139,24 @@ def audio_path_specify():
     
     df.to_csv('/root/clssl/SSL_src/metadata/test_librispeech.csv', index=False)
 
-audio_path_specify()
+
+
+def listen_pkl():
+    pkl_name = '/root/clssl/SSL_src/prepared/pkl/doa/0.pkl'
+
+    pkl_file = open(pkl_name, 'rb')
+    data_dict = pickle.load(pkl_file)   # torch tensors
+    pkl_file.close()
+    
+    mixed = data_dict['mixed'].numpy()
+    vad = data_dict['vad'].numpy()
+    azi_list = data_dict['azi'].tolist()
+    coherent_snr = data_dict['coherent_snr']
+    rt60 = data_dict['rt60']
+
+    print(mixed.shape, vad.shape, len(azi_list), coherent_snr, rt60)
+
+    sf.write('/root/clssl/SSL_src/prepared/0.wav', mixed.T, 16000)
+
+
+listen_pkl()

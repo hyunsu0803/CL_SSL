@@ -227,22 +227,24 @@ class Logger_config():
         target=target.cpu().numpy()                 
         speech_azi=speech_azi.cpu().numpy()         # (B, 1)
 
-        output_azi = out[0,2].argmax(axis=0)        # (n, )
-        vad_bool = target[0,2].sum(axis=0) > 0     # (n, )
-        ans_azi = speech_azi[0,0]                   # (1, )
+        batch_size = out.shape[0]
 
+        for b in range(batch_size):
+            output_azi = out[b, 2].argmax(axis=0)  # (n,)
+            vad_bool = target[b, 2].sum(axis=0) > 0  # (n,)
+            ans_azi = speech_azi[b, 0]  # (1,)
 
-        error = abs(output_azi - ans_azi)
-        error = np.minimum(error, 360-error)
+            error = np.abs(output_azi - ans_azi)
+            error = np.minimum(error, 360 - error)
 
-        for i, vad in enumerate(vad_bool):
-            if vad:
+            for i, vad in enumerate(vad_bool):
+                if vad:
 
-                self.save_train_config_dict['total_error_sum'] += error[i]
-                self.save_train_config_dict['number_of_blocks'] += 1
+                    self.save_train_config_dict['total_error_sum'] += error[i]
+                    self.save_train_config_dict['number_of_blocks'] += 1
 
-                if error[i] <= 10:
-                    self.save_train_config_dict['acc_10'] += 1
+                    if error[i] <= 10:
+                        self.save_train_config_dict['acc_10'] += 1
 
        
     def train_epoch_loss_log(self):
@@ -423,9 +425,9 @@ class Logger_config():
 
 
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar".format(epoch))
-        util.util.draw_result_pic(self.loss_png_dir, epoch, self.csv_loss['train_epoch_loss'],  self.csv_loss['test_epoch_loss'], 'loss')
-        util.util.draw_result_pic(self.acc_png_dir, epoch, self.csv_acc['train_epoch_acc'],  self.csv_acc['test_epoch_acc'], 'Acc')
-        util.util.draw_result_pic(self.mae_png_dir, epoch, self.csv_mae['train_epoch_mae'],  self.csv_mae['test_epoch_mae'], 'MAE')
+        util.util.draw_result_pic(self.loss_png_dir, epoch, self.csv_loss['test_epoch_loss'],  self.csv_loss['test_epoch_loss'], 'loss')
+        util.util.draw_result_pic(self.acc_png_dir, epoch, self.csv_acc['test_epoch_acc'],  self.csv_acc['test_epoch_acc'], 'Acc')
+        util.util.draw_result_pic(self.mae_png_dir, epoch, self.csv_mae['test_epoch_mae'],  self.csv_mae['test_epoch_mae'], 'MAE')
 
 
     def wandb_config(self):
@@ -445,7 +447,7 @@ class Dataloader_config():
     def config(self):
 
         self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 64
-        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 8
+        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 4
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
         self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 8
         self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/doa/'
@@ -502,7 +504,7 @@ class Trainer():
 
         torch.cuda.empty_cache()
         
-        for iter_num, (mixed, vad, speech_azi, speech_ele, _) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+        for iter_num, (mixed, vad, speech_azi, speech_ele, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
                 
             mixed=mixed.to(self.hyperparameter.device)
             vad=vad.to(self.hyperparameter.device)
@@ -517,7 +519,7 @@ class Trainer():
             self.logger.train_iter_loss_log(loss)
             self.logger.train_iter_metric_log(out, target, speech_azi)
 
-            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, _, out, loss, target])
+            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, coherent_snr, rt60, out, loss, target])
             gc.collect()
         
         

@@ -50,9 +50,9 @@ class Dataloader_config():
         self.args=args
         
     def config(self):
+        
         self.doa_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
         self.scl_maker = Speech_datamake_for_scl(self.args['dataloader']['val']['maker'])
-        # self.test_maker = Gunshot_datamake(self.args['dataloader']['test']['maker'])
       
         return self.args   
           
@@ -76,7 +76,7 @@ class Trainer():
         #     self.validation_for_scl(0)
         
         self.validation_for_doa(0)
-        # self.test(0)
+
         
 
     def validation_for_scl(self, epoch):
@@ -84,23 +84,15 @@ class Trainer():
         with torch.no_grad():
             n_room = 8
             self.dataloader.scl_maker.dataset.random_room_speech_select(n_room)
-            for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.scl_maker , desc='Test', total=len(self.dataloader.scl_maker), )):
+            for iter_num, (a, b, c, d) in enumerate(tqdm(self.dataloader.scl_maker , desc='Test', total=len(self.dataloader.scl_maker), )):
                 self.dataloader.scl_maker.dataset.random_room_speech_select(n_room)
                 
     
     def validation_for_doa(self, epoch):
             
             with torch.no_grad():
-                for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.doa_maker , desc='Test', total=len(self.dataloader.doa_maker), )):
+                for iter_num, (a, b, c, d) in enumerate(tqdm(self.dataloader.doa_maker , desc='Test', total=len(self.dataloader.doa_maker), )):
                     continue
-
-
-    def test(self, epoch):
-      
-        with torch.no_grad():
-            for iter_num, (mixed, vad, speech_azi, num_spk) in enumerate(tqdm(self.dataloader.test_maker , desc='Test', total=len(self.dataloader.test_maker), )):
-            #     break
-                continue
                             
 
 

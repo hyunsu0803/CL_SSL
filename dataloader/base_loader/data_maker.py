@@ -79,8 +79,8 @@ class base_data_maker(datamake):
         temp_total_df=self.speech_csv
         
         for spk in range(num_spk-1): # selecting num_spk-1 more speakers, not overlapped
-            last_speaker=speech_info.iloc[-1]['speaker']
-            temp_total_df=temp_total_df.drop(temp_total_df[temp_total_df['speaker']==last_speaker].index)
+            last_speaker=speech_info.iloc[-1]['speaker_id']
+            temp_total_df=temp_total_df.drop(temp_total_df[temp_total_df['speaker_id']==last_speaker].index)
             temp_df=temp_total_df.sample(1)            
             speech_info=pd.concat((speech_info, temp_df))
       

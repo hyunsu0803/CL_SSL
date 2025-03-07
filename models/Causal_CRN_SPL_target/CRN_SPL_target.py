@@ -219,8 +219,10 @@ class main_model_for_doa(nn.Module):
         vad_block=vad_block[:, None, None, None, :]
         
         target = labelling*vad_block   # (B, 3, num_spk, 360, block_num)
+
+        target=torch.max(target, dim=2).values   # (B, 3, 360, block_num)
        
-        return target.squeeze(dim=2) # (B, 3, 360, block_num)
+        return target   
 
         
     def forward(self, mixed, vad, azi_list):
