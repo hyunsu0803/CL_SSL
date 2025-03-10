@@ -7,6 +7,7 @@ import importlib
 from tqdm import tqdm
 from dataloader.wrap_dataload import Synth_dataload, Real_dataload
 import matplotlib.pyplot as plt
+import metric
 
 
 class Hyparam_set():
@@ -191,7 +192,7 @@ class Logger_config():
         snr_values, error_values_snr = zip(*scatter_list_snr)
 
         plt.figure()
-        plt.scatter(snr_values, error_values_snr, color='b', alpha=0.1, label='Data Points')
+        plt.scatter(snr_values, error_values_snr, color='b', alpha=0.1, s=1, label='Data Points')
         plt.xlabel('SNR')
         plt.ylabel('DOA error')
         plt.savefig(self.result_folder['inference_folder']+ self.room_type[0]+f'/scatter_snr.png', dpi=600)
@@ -287,7 +288,7 @@ class Tester():
                     speech_azi=speech_azi.to(self.hyperparameter.device)
     
 
-                    out, target = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n)
+                    out, target, vad_block = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n)
 
                     out=out.sigmoid().detach().cpu().numpy()                        
                     target=target.cpu().numpy()                 
@@ -297,33 +298,39 @@ class Tester():
                     output_azi = out[0,2].argmax(axis=0)        # (n, )
                     vad_bool = target[0,2].sum(axis=0) > 0     # (n, )
                     ans_azi = speech_azi[0,0]                   # (1, )
+
+
+                    # total_argmax_acc, total_softmax_acc, total_half_softmax_acc, total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, number_of_degrees_to_estimate=metric.mae.calc_mae(out, target, vad, num_spk, speech_azi,\
+                    #     calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
+                    #         acc_threshold=self.args['hyparam']['acc_threshold'],\
+                    #             local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
                     
                     
                     pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
                     
-                    # ## save as png
-                    # plt.figure()
-                    # plt.subplot(2,1,1)
-                    # plt.imshow(out[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
-                    # plt.xlabel('Time frame')
-                    # plt.ylabel('Source angle')
-                    # plt.title('Estimated DOA spatial spectrum')
-                    # plt.subplot(2,1,2)
-                    # plt.imshow(target[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
-                    # plt.xlabel('Time frame')
-                    # plt.ylabel('Source angle')
-                    # plt.title('Target DOA spatial spectrum')
-                    # os.makedirs('./results/pngs/', exist_ok=True)
-                    # plt.tight_layout()
-                    # plt.savefig('./results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
-                    # plt.close()
+                    ## save as png
+                    plt.figure()
+                    plt.subplot(2,1,1)
+                    plt.imshow(out[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
+                    plt.xlabel('Time frame')
+                    plt.ylabel('Source angle')
+                    plt.title('Estimated DOA spatial spectrum')
+                    plt.subplot(2,1,2)
+                    plt.imshow(target[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
+                    plt.xlabel('Time frame')
+                    plt.ylabel('Source angle')
+                    plt.title('Target DOA spatial spectrum')
+                    os.makedirs('./results/pngs/', exist_ok=True)
+                    plt.tight_layout()
+                    plt.savefig('./results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
+                    plt.close()
                     
                     self.logger.error_update(output_azi, ans_azi, vad_bool, coherent_snr, rt60)
                     
                     self.learner.memory_delete([mixed, vad, speech_azi, out, target])
                   
                 self.logger.save_output(epoch)
-                self.logger.scatter_error_plot()
+                # self.logger.scatter_error_plot()
 
             break
 

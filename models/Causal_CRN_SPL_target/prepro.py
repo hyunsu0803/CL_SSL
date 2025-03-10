@@ -49,12 +49,13 @@ class Prepro():
         return block_stft, block_vad_frame
     
 
-    def ib_RTF(self, block_stft, block_vad_frame):  # (B, C, F, n, s) (B, 1, n, s)
+    def ib_RTF(self, block_stft, block_vad_frame):  # (B, C, F, n, s) (B, num_spk, n, s)
 
         B, C, F, n, s = block_stft.shape
+        num_spk = block_vad_frame.shape[1]
 
         block_stft = block_stft.permute(0, 3, 1, 2, 4).reshape(-1, C, F, s)    # (B*block_num, C, F, block_size)
-        block_vad_frame = block_vad_frame.permute(0, 2, 1, 3).reshape(-1, block_vad_frame.shape[1], s) # (B*block_num, 1, block_size)
+        block_vad_frame = block_vad_frame.permute(0, 2, 1, 3).reshape(-1, block_vad_frame.shape[1], s) # (B*block_num, num_spk, block_size)
     
         linear_spectra = block_stft.permute(0, 2, 3, 1)    # (B*n, F, s, C)
         
@@ -72,10 +73,13 @@ class Prepro():
         ibRTF = ibRTF.permute(0, 2, 1)    # (B*n, 2(C-1), F)
         ibRTF = ibRTF.reshape(B, n, 2*(C-1), F).permute(0, 2, 3, 1)    # (B, 2(C-1), F, n)
 
+        active_block_list = []
+        for spk in range(num_spk):
+            active_frames = [len(torch.nonzero(block_vad_frame[b, spk] == 1, as_tuple=True)[0]) for b in range(block_vad_frame.shape[0])]
+            active_frames = [ 1 if idx > 20 else 0 for idx in active_frames ]    # (B*n)
+            active_block = torch.tensor(active_frames, device=block_stft.device)   # (B*n)
+            active_block_list.append(active_block)
 
-        active_frames = [len(torch.nonzero(block_vad_frame[b, 0] == 1, as_tuple=True)[0]) for b in range(block_vad_frame.shape[0])]
-        active_frames = [ 1 if idx > 20 else 0 for idx in active_frames ]    # (B*n)
-        active_block = torch.tensor(active_frames, device=block_stft.device)   # (B*n)
-        vad_block = active_block.reshape(B, n)    # (B, n)
+        vad_block = torch.stack(active_block_list).reshape(num_spk, B, -1).permute(1, 0, 2)    # (B, num_spk, n)
 
-        return ibRTF, vad_block     # (B, 2(C-1), F, n), (B, n)
+        return ibRTF, vad_block     # (B, 2(C-1), F, n), (B, num_spk, n)

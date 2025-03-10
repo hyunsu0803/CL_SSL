@@ -216,7 +216,7 @@ class main_model_for_doa(nn.Module):
         labelling=torch.exp(kappa_d*(torch.cos(ang_diff)-1)).unsqueeze(-1) # (B, 3, num_spk, 360, 1)  
         
         # (B, n) -> (B, 1, 1, 1, n)
-        vad_block=vad_block[:, None, None, None, :]
+        vad_block=vad_block[:, None, :, None, :]
         
         target = labelling*vad_block   # (B, 3, num_spk, 360, block_num)
 
@@ -242,6 +242,6 @@ class main_model_for_doa(nn.Module):
         target=self.make_target(vad_block, azi_list)   # (B, 3, 360, n)
 
         
-        return out, target
+        return out, target, vad_block
 
 

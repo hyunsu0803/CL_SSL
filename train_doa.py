@@ -425,7 +425,7 @@ class Logger_config():
 
 
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar".format(epoch))
-        util.util.draw_result_pic(self.loss_png_dir, epoch, self.csv_loss['test_epoch_loss'],  self.csv_loss['test_epoch_loss'], 'loss')
+        util.util.draw_result_pic(self.loss_png_dir, epoch, self.csv_loss['train_epoch_loss'],  self.csv_loss['test_epoch_loss'], 'loss')
         util.util.draw_result_pic(self.acc_png_dir, epoch, self.csv_acc['test_epoch_acc'],  self.csv_acc['test_epoch_acc'], 'Acc')
         util.util.draw_result_pic(self.mae_png_dir, epoch, self.csv_mae['test_epoch_mae'],  self.csv_mae['test_epoch_mae'], 'MAE')
 
@@ -495,6 +495,9 @@ class Trainer():
             
             self.logger.epoch_finish(epoch, self.model, self.optimizer)
 
+            gc.collect()
+            torch.cuda.empty_cache()
+
         self.learner.memory_delete([self.dataloader])
     
 
@@ -511,7 +514,7 @@ class Trainer():
             speech_azi=speech_azi.to(self.hyperparameter.device)
             
             
-            out, target = self.model(mixed, vad, speech_azi)
+            out, target, vad_block = self.model(mixed, vad, speech_azi)
             
             loss = self.learner.train_update(out, target)
                 
@@ -547,7 +550,7 @@ class Trainer():
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
                 
-                out, target = self.model(mixed, vad, speech_azi)
+                out, target, vad_block = self.model(mixed, vad, speech_azi)
                 
                 loss=self.learner.test_update(out, target)
                     
