@@ -177,6 +177,7 @@ class main_model_for_doa(nn.Module):
     
 
     def model_select_for_scl_feature(self):
+        
         model_name=self.config_scl['name']
         model_import='models.'+model_name+'.main'
 
@@ -228,7 +229,7 @@ class main_model_for_doa(nn.Module):
     def forward(self, mixed, vad, azi_list):
 
         block_stft, block_vad_frame = self.prepro.make_block(mixed, vad)
-        ibRTF, vad_block = self.prepro.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, n)
+        ibRTF, vad_block = self.prepro.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, num_spk, n)
 
         if self.use_scl:
             z, embedding, azi_list = self.scl_model(mixed, vad, azi_list)

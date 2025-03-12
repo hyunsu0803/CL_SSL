@@ -271,6 +271,27 @@ class Tester():
       
         self.test(0)
 
+    
+    def plot_out_target(self, out, target, pkl_idx):
+
+        ## save as png
+        plt.figure()
+        plt.subplot(2,1,1)
+        plt.imshow(out, aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
+        plt.xlabel('Time frame')
+        plt.ylabel('Source angle')
+        plt.title('Estimated DOA spatial spectrum')
+        plt.subplot(2,1,2)
+        plt.imshow(target, aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
+        plt.xlabel('Time frame')
+        plt.ylabel('Source angle')
+        plt.title('Target DOA spatial spectrum')
+        os.makedirs('./results_03071824_scl_doa/pngs/', exist_ok=True)
+        plt.tight_layout()
+        plt.savefig('./results_03071824_scl_doa/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
+        plt.close()
+
+
 
     def test(self, epoch):
         self.model.eval()
@@ -288,42 +309,27 @@ class Tester():
                     speech_azi=speech_azi.to(self.hyperparameter.device)
     
 
-                    out, target, vad_block = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n)
+                    out, target, vad_block = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n), (B, num_spk, n)
 
-                    out=out.sigmoid().detach().cpu().numpy()                        
-                    target=target.cpu().numpy()                 
-                    speech_azi=speech_azi.cpu().numpy()         # (B, 1)
-
-
-                    output_azi = out[0,2].argmax(axis=0)        # (n, )
-                    vad_bool = target[0,2].sum(axis=0) > 0     # (n, )
-                    ans_azi = speech_azi[0,0]                   # (1, )
-
-
-                    # total_argmax_acc, total_softmax_acc, total_half_softmax_acc, total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, number_of_degrees_to_estimate=metric.mae.calc_mae(out, target, vad, num_spk, speech_azi,\
-                    #     calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
-                    #         acc_threshold=self.args['hyparam']['acc_threshold'],\
-                    #             local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
-                    
+                    out=out.sigmoid().detach().cpu()  
+                    target=target.cpu()               
+                    speech_azi=speech_azi.cpu()         # (B, 1)
+                    vad_block=vad_block.cpu()           # (B, num_spk, n)
                     
                     pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
-                    
-                    ## save as png
-                    plt.figure()
-                    plt.subplot(2,1,1)
-                    plt.imshow(out[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
-                    plt.xlabel('Time frame')
-                    plt.ylabel('Source angle')
-                    plt.title('Estimated DOA spatial spectrum')
-                    plt.subplot(2,1,2)
-                    plt.imshow(target[0,2], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
-                    plt.xlabel('Time frame')
-                    plt.ylabel('Source angle')
-                    plt.title('Target DOA spatial spectrum')
-                    os.makedirs('./results/pngs/', exist_ok=True)
-                    plt.tight_layout()
-                    plt.savefig('./results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
-                    plt.close()
+                    self.plot_out_target(out[0,2], target[0,2], pkl_idx)
+
+                    num_spk = vad_block.sum(axis=1).max()       # (1, )
+                    num_spk = num_spk.item()
+                    total_argmax_acc, total_softmax_acc, total_half_softmax_acc, total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, number_of_degrees_to_estimate=metric.mae.calc_mae(out, target, vad_block, num_spk, speech_azi,\
+                        calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
+                            acc_threshold=self.args['hyparam']['acc_threshold'],\
+                                local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
+    
+    
+                    output_azi = out[0,2].numpy().argmax(axis=0)        # (n, )
+                    vad_bool = target[0,2].numpy().sum(axis=0) > 0     # (n, )
+                    ans_azi = speech_azi[0,0].numpy()                 # (1, )
                     
                     self.logger.error_update(output_azi, ans_azi, vad_bool, coherent_snr, rt60)
                     

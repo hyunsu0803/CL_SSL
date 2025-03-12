@@ -200,9 +200,9 @@ class Logger_config():
         self.csv['test_epoch_loss']=[]
         self.csv['test_best_loss']=[]
 
-        self.csv_dir=self.args['logger']['save_csv']
+        self.csv_dir=self.args['logger']['loss_csv']
         self.model_save_dir=self.args['logger']['model_save_dir']
-        self.png_dir=self.args['logger']['png_dir']
+        self.png_dir=self.args['logger']['loss_png_dir']
 
         if self.args['logger']['optimize_method']=='min':
             self.best_test_loss=math.inf
@@ -286,7 +286,7 @@ class Logger_config():
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar")
 
         
-        util.util.draw_result_pic(self.png_dir, epoch, self.csv['train_epoch_loss'],  self.csv['test_epoch_loss'])
+        util.util.draw_result_pic(self.png_dir, epoch, self.csv['train_epoch_loss'],  self.csv['test_epoch_loss'], 'Loss')
 
 
     def wandb_config(self):
