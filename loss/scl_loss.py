@@ -50,12 +50,27 @@ class Weighted_SupConLoss(nn.Module):
         
     
     def generate_mask(self, labels):
-        
+
         distance = torch.abs(labels - labels.T)     # (512, 512)
         distance = torch.where(distance>180, 360-distance, distance)
         
         self.labelling = self.labelling.to(distance.device)
         mask = self.labelling[distance]
+
+        mask = self.process_silence(labels, mask)
+        
+        return mask
+    
+
+    def process_silence(self, labels, mask):
+        
+        silence_indices = torch.where(labels == 360)
+        mask[silence_indices, :] = 0
+        mask[:, silence_indices] = 0
+
+        for i in silence_indices:
+            for j in silence_indices:
+                mask[i, j] = 1
         
         return mask
             
@@ -79,6 +94,7 @@ class Weighted_SupConLoss(nn.Module):
 
         if sigma == 0:
             mask = torch.eq(labels, labels.T).float().to(self.device)   # (B, B)
+            mask = self.process_silence(labels, mask)
         else:
             self.sigma = torch.tensor(sigma)
             self.labelling = self.generate_weight().to(self.device)

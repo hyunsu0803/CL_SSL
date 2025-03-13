@@ -72,8 +72,8 @@ class Trainer():
     
     def run(self, ):
         
-        # for i in range(10):
-        #     self.validation_for_scl(0)
+        for i in range(10):
+            self.validation_for_scl(0)
         
         self.validation_for_doa(0)
 

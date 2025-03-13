@@ -507,7 +507,7 @@ class Trainer():
 
         torch.cuda.empty_cache()
         
-        for iter_num, (mixed, vad, speech_azi, speech_ele, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+        for iter_num, (mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
                 
             mixed=mixed.to(self.hyperparameter.device)
             vad=vad.to(self.hyperparameter.device)
@@ -522,7 +522,7 @@ class Trainer():
             self.logger.train_iter_loss_log(loss)
             self.logger.train_iter_metric_log(out, target, speech_azi)
 
-            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, coherent_snr, rt60, out, loss, target])
+            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60, out, loss, target])
             gc.collect()
         
         
@@ -542,7 +542,7 @@ class Trainer():
             # mixed : (16, 4, 64000)
             # speech_azi : (16, 1)
             # num_spk : (16)
-            for iter_num, (mixed, vad, speech_azi, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
+            for iter_num, (mixed, vad, speech_azi, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
                 
                 
                 mixed=mixed.to(self.hyperparameter.device)
@@ -558,7 +558,7 @@ class Trainer():
                 self.logger.test_iter_loss_log(loss)
                 self.logger.test_iter_metric_log(out, target, speech_azi)
 
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target, coherent_snr, rt60])
+                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target, white_snr, coherent_snr, rt60])
                 gc.collect()
              
             

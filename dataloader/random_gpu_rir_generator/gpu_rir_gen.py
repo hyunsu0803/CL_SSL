@@ -488,7 +488,7 @@ class acoustic_simulator_on_the_fly(simulator_common):
         return self.params, azi_list, ele_list, rt60
 
 
-    def create_rir(self, num_spk=1, with_coherent_noise=True, mic_type='miyungpa', mic_num=4, room_info=None, azimuth_deg=None): 
+    def create_rir(self, num_spk=1, with_coherent_noise=True, mic_type='tetra', mic_num=4, room_info=None, azimuth_deg=None): 
         
         self.params, azi_list, ele_list, rt60 = self.create_param(num_spk, with_coherent_noise, mic_type, mic_num, room_info=room_info, azimuth_deg=azimuth_deg)
   

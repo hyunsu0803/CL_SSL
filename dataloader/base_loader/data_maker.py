@@ -234,7 +234,7 @@ class base_data_maker(datamake):
         if idx is None and room_info is None:
             raise ValueError('idx or room_info must be given')
         
-        # 방 2개에 해당하는 rir 생성
+
         num_spk=random.randint(1, self.max_num_people) 
         
         
@@ -269,28 +269,30 @@ class base_data_maker(datamake):
         vad_list=[]
         speech_start_point_list=[]
         
-        if idx is None:
+        if idx is None:     # scl
             speech_info = room_info['speech_info']
-        else:
-            speech_info=self.select_different_speakers(self.speech_csv.iloc[idx:idx+1], num_spk)    # num_spk=1
+        else:               # doa
+            speech_info=self.select_different_speakers(self.speech_csv.iloc[idx:idx+1], num_spk)   
 
         
-        # only 1 iterration
+
         for spk_num, spk_info in enumerate(speech_info.iterrows()):
             
             spk_info = spk_info[1]          
             speech_wav, pos, speech_start_point, vad_out, fs = self.main_speech_load(spk_info)
-            s_clean = speech_wav * vad_out
+            if azimuth_deg == 360:
+                speech_wav = np.zeros_like(speech_wav)
+            
 
             speech_rir = speech_rirs[spk_num]       
             self.speech_rir_peak = self.rir_peak_find(speech_rir)
             
-            # print(s_clean.shape, speech_rir.shape)      # (34416,) (4, 5040)
-            if s_clean.ndim == 1:
-                s_clean = np.expand_dims(s_clean, 0)
+
+            if speech_wav.ndim == 1:
+                speech_wav = np.expand_dims(speech_wav, 0)
             
             # RIR convolution
-            rired_speech = self.gpu_convolve(s_clean, speech_rir)
+            rired_speech = self.gpu_convolve(speech_wav, speech_rir)
             
             start_point, rired_speech, vad_out=self.get_speech_start_point(rired_speech, self.speech_rir_peak, pos, vad_out, )
 
@@ -302,11 +304,10 @@ class base_data_maker(datamake):
         white_noise_snr, normalize_factor=self.get_random_snr(self.white_noise_snr, self.normalize_factor_bound)
 
         ####### spk mixer, normalizing speech
-        # rired_speech_list=self.spk_mixer(rired_speech_list)
+        rired_speech_list=self.spk_mixer(rired_speech_list)
         
         ########### get vad     (1, 64000)
         vad=self.get_vad(self.duration, vad_list, speech_start_point_list, self.max_num_people)
-        # vad=np.ones_like(vad)
         
         ######## speech & noise   
         mixed=self.make_noisy(self.duration, rired_speech_list, white_noise_snr, normalize_factor, 
@@ -318,31 +319,29 @@ class base_data_maker(datamake):
             azi_list.append(0)
             ele_list.append(0)
         mixed=mixed.astype('float32')
-        vad=vad.astype('float32')
-        # mixed : (4, 64000)
-        # vad : (1, 64000)
-        # speech_azi : (1,)
-        # num_spk : 1
-        
+        vad=vad.astype('float32')        
     
         # vad & azi_list == torch.tensor
         vad, azi_list=self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)
         
-        return torch.from_numpy(mixed), vad, azi_list, torch.tensor(ele_list), coherent_noise_snr, rt60
+        return torch.from_numpy(mixed), vad, azi_list, torch.tensor(ele_list), white_noise_snr, coherent_noise_snr, rt60
     
+
     def arrange_data(self, idx):
         azimuth_deg = idx
         
         mixed_list = []
         vad_list = []
-        white_noise_snr_list = []
+        white_snr_list = []
+        coherent_snr_list = []
+        rt60_list = []
         azi_list_list = []
         ele_list_list = []
 
         
         for room_info in self.rooms:
             # tensor, tensor, tensor,   float     # tensor는 model에 들어감
-            mixed, vad, azi_list, ele_list, white_noise_snr = self.make_data(idx=None, 
+            mixed, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx=None, 
                                                                     room_info=room_info, 
                                                                     azimuth_deg=azimuth_deg, 
                                                                     with_coherent_noise=False)
@@ -350,7 +349,9 @@ class base_data_maker(datamake):
             vad_list.append(vad)
             azi_list_list.append(azi_list)
             ele_list_list.append(ele_list)
-            white_noise_snr_list.append(white_noise_snr)
+            white_snr_list.append(white_snr)
+            coherent_snr_list.append(coherent_snr)
+            rt60_list.append(rt60)
         
         mixed = torch.stack(mixed_list)
         vad = torch.stack(vad_list)
@@ -358,7 +359,7 @@ class base_data_maker(datamake):
         ele_list = torch.stack(ele_list_list)
         
         
-        return mixed, vad, azi_list, ele_list, white_noise_snr_list
+        return mixed, vad, azi_list, ele_list, white_snr_list, coherent_snr_list, rt60_list
     
     
     def __getitem__(self, idx):
@@ -369,9 +370,11 @@ class base_data_maker(datamake):
 class train_data_maker_for_scl(base_data_maker):
     def __init__(self, args):
         super(train_data_maker_for_scl, self).__init__(args)
+
+        self.max_num_people = 1
         
     def __len__(self):
-        return 360
+        return 361
         
     def __getitem__(self, idx):
         return self.arrange_data(idx)
@@ -391,29 +394,33 @@ class speech_data_maker_for_scl(base_data_maker):
     def __init__(self, args):
         super(speech_data_maker_for_scl, self).__init__(args)
         
-        print('speech_csv', self.args['speech_csv'])
-        print('noise_csv', self.args['noise_csv'])
+        # print('speech_csv', self.args['speech_csv'])
+        # print('noise_csv', self.args['noise_csv'])
         
         self.pkl_dir = './SSL_src/prepared/pkl/scl/'
         os.makedirs(self.pkl_dir, exist_ok=True)
+
+        self.max_num_people = 1
         
     
     def __len__(self):
-        return 360
+        return 361
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, ele_list, white_noise_snr_list = self.arrange_data(idx)
+        mixed, vad, azi_list, ele_list, white_snr_list, coherent_snr_list, rt60_list = self.arrange_data(idx)
         
         save_dict={}
-        save_dict['noisy']=mixed    # tensor
+        save_dict['mixed']=mixed    # tensor
         save_dict['vad']=vad        # tensor
         save_dict['azi']=azi_list   # tensor
         save_dict['ele']=ele_list   # tensor
-        save_dict['white_noise_snr_list']=white_noise_snr_list  # list
+        save_dict['white_snr_list']=white_snr_list  # list
+        save_dict['coherent_snr_list']=coherent_snr_list
+        save_dict['rt60_list']=rt60_list
 
         
-        pkl_name = list(azi_list[0].numpy()) + white_noise_snr_list
+        pkl_name = list(azi_list[0].numpy()) + white_snr_list
         pkl_name = [str(int(i)) for i in pkl_name]
         pkl_name = '_'.join(pkl_name) + '.pkl'
         pkl_name = self.pkl_dir + pkl_name
@@ -434,21 +441,22 @@ class speech_data_maker_for_doa(base_data_maker):
     def __init__(self, args):
         super(speech_data_maker_for_doa, self).__init__(args)
         
-        print('speech_csv', self.args['speech_csv'])
-        print('noise_csv', self.args['noise_csv'])
+        # print('speech_csv', self.args['speech_csv'])
+        # print('noise_csv', self.args['noise_csv'])
         
         self.pkl_dir = './SSL_src/prepared/pkl/doa/'
         os.makedirs(self.pkl_dir, exist_ok=True)
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, ele_list, coherent_snr, rt60 = self.make_data(idx, with_coherent_noise=True)
+        mixed, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx, with_coherent_noise=True)
         
         save_dict={}
         save_dict['mixed']=mixed    # tensor
         save_dict['vad']=vad        # tensor
         save_dict['azi']=azi_list   # tensor
         save_dict['ele']=ele_list
+        save_dict['white_snr']=white_snr
         save_dict['coherent_snr']=coherent_snr 
         save_dict['rt60']=rt60
         

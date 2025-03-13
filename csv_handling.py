@@ -142,21 +142,17 @@ def audio_path_specify():
 
 
 def listen_pkl():
-    pkl_name = '/root/clssl/SSL_src/prepared/pkl/doa/0.pkl'
+    pkl_name = '/root/clssl/SSL_src/prepared/pkl/scl/360_16_27_28_23_18_5_28_17.pkl'
 
     pkl_file = open(pkl_name, 'rb')
     data_dict = pickle.load(pkl_file)   # torch tensors
     pkl_file.close()
     
-    mixed = data_dict['mixed'].numpy()
-    vad = data_dict['vad'].numpy()
-    azi_list = data_dict['azi'].tolist()
-    coherent_snr = data_dict['coherent_snr']
-    rt60 = data_dict['rt60']
+    mixed = data_dict['mixed'].numpy()[5, 0]
+    white_snr = data_dict['white_snr_list'][5]
+    print(white_snr)
 
-    print(mixed.shape, vad.shape, len(azi_list), coherent_snr, rt60)
-
-    sf.write('/root/clssl/SSL_src/prepared/0.wav', mixed.T, 16000)
+    sf.write('/root/clssl/SSL_src/prepared/5.wav', mixed.T, 16000)
 
 
 listen_pkl()

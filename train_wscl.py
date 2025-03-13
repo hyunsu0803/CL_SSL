@@ -306,7 +306,7 @@ class Dataloader_config():
     def config(self):
 
         self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 64
-        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 8
+        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 1#8
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 64
         self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 16
         self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/scl/'
