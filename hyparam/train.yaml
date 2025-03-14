@@ -6,7 +6,7 @@ last_epoch: 400
 resume_epoch: 0
 
 GPGPU:
-  device_ids: [0]
+  device_ids: [0, 1, 2, 3]
 
 SCL: False
 finetune: False
