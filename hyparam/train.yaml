@@ -2,7 +2,7 @@ torch_start_method: 'spawn'
 randomseed: 0
 
 
-last_epoch: 130
+last_epoch: 400
 resume_epoch: 0
 
 GPGPU:

@@ -350,7 +350,7 @@ class base_data_maker(datamake):
             azi_list_list.append(azi_list)
             ele_list_list.append(ele_list)
             white_snr_list.append(white_snr)
-            coherent_snr_list.append(coherent_snr)
+            coherent_snr_list.append(coherent_snr)  # None
             rt60_list.append(rt60)
         
         mixed = torch.stack(mixed_list)
@@ -359,7 +359,7 @@ class base_data_maker(datamake):
         ele_list = torch.stack(ele_list_list)
         
         
-        return mixed, vad, azi_list, ele_list, white_snr_list, coherent_snr_list, rt60_list
+        return mixed, vad, azi_list, ele_list, white_snr_list, rt60_list
     
     
     def __getitem__(self, idx):
@@ -408,7 +408,7 @@ class speech_data_maker_for_scl(base_data_maker):
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, ele_list, white_snr_list, coherent_snr_list, rt60_list = self.arrange_data(idx)
+        mixed, vad, azi_list, ele_list, white_snr_list, rt60_list = self.arrange_data(idx)
         
         save_dict={}
         save_dict['mixed']=mixed    # tensor
@@ -416,7 +416,7 @@ class speech_data_maker_for_scl(base_data_maker):
         save_dict['azi']=azi_list   # tensor
         save_dict['ele']=ele_list   # tensor
         save_dict['white_snr_list']=white_snr_list  # list
-        save_dict['coherent_snr_list']=coherent_snr_list
+        save_dict['coherent_snr_list']=[None]*len(white_snr_list)
         save_dict['rt60_list']=rt60_list
 
         

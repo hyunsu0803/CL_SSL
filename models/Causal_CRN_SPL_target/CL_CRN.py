@@ -82,14 +82,25 @@ class crn(nn.Module):
             self.pooling.append(nn.MaxPool2d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
     
 
-        self.GRU_layer=nn.GRU(**config['GRU'])
-        self.h0=torch.zeros(*config['GRU_init']['shape'])
-        self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
-
-
         ##############################
         # projection layer
         ##############################
+
+        self.GRU_layer=nn.ModuleList()
+        self.h0_layer=[]
+        self.GRU_layer.append(nn.GRU(**config['GRU']))
+        self.GRU_layer.append(nn.GRU(**config['GRU']))
+        self.GRU_layer.append(nn.GRU(**config['GRU']))
+
+        
+        self.h0_layer.append(torch.nn.parameter.Parameter(torch.zeros(*config['GRU_init']['shape']), requires_grad=config['GRU_init']['learnable']))
+        self.h0_layer.append(torch.nn.parameter.Parameter(torch.zeros(*config['GRU_init']['shape']), requires_grad=config['GRU_init']['learnable']))
+        self.h0_layer.append(torch.nn.parameter.Parameter(torch.zeros(*config['GRU_init']['shape']), requires_grad=config['GRU_init']['learnable']))
+        
+        # self.GRU_layer=nn.GRU(**config['GRU'])
+        # self.h0=torch.zeros(*config['GRU_init']['shape'])
+        # self.h0=torch.nn.parameter.Parameter(self.h0, requires_grad=config['GRU_init']['learnable'])
+
 
         self.azi_mapping_conv_layer=nn.ModuleList()
         self.azi_mapping_final=nn.ModuleList()
@@ -120,16 +131,8 @@ class crn(nn.Module):
 
 
         b, c, f, t=x.shape              # (B, 64, 8, n)
-        x=x.view(b, -1, t).permute(0,2,1)   # (B, n, 64*8=512)
-
-        h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  # h0 : (num_layers, B, hidden_size) = (3, 512, 256)
-        self.GRU_layer.flatten_parameters()
-        
-        x, h=self.GRU_layer(x, h0)      # (B, n, 256(hidden size))
-
-        embedding = F.normalize(x, dim=-1).permute(0, 2, 1)  # (B, 256, n)
-        
-
+        x=x.view(b, -1, t)                  # (B, 512, n)
+        embedding = F.normalize(x, dim=1)   # (B, 512, n)
 
         ##############################
         # projection layer
@@ -137,12 +140,18 @@ class crn(nn.Module):
 
         outputs=[]
 
-        for cnn_layer, final_layer in zip(self.azi_mapping_conv_layer, self.azi_mapping_final):
-            out = cnn_layer(embedding)
+        for gru_layer, h0_layer, cnn_layer, final_layer in zip(self.GRU_layer, self.h0_layer, self.azi_mapping_conv_layer, self.azi_mapping_final):
+            
+            h0 = h0_layer.repeat_interleave(embedding.shape[0], dim=1).to(embedding.device)  # h0 : (num_layers, B, hidden_size) = (3, 512, 256)
+            gru_layer.flatten_parameters()
+
+
+            out, h =gru_layer(embedding.permute(0, 2, 1), h0)  # (B, n, 256)
+            out = out.permute(0, 2, 1)  # (B, 256, n) 
+            out = cnn_layer(out)
             out = final_layer(out)
 
             out = F.normalize(out, dim=1)  # (B, 128, n)
-
             outputs.append(out)
         
         return outputs, embedding

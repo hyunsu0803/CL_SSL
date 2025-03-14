@@ -42,16 +42,15 @@ class synth_data_loader(datamake):
         mixed = data_dict['mixed'].numpy()
         vad = data_dict['vad'].numpy()
         azi_list = data_dict['azi'].tolist()
-        white_snr = data_dict['white_snr']
-        coherent_snr = data_dict['coherent_snr']
-        rt60 = data_dict['rt60']
+        white_snr = data_dict['white_snr_list']
+        rt60 = data_dict['rt60_list']
         
         
         # does nothing when 'ans_azi'== 0
         # become torch.tensor
         vad, azi_list = self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)   
         
-        return torch.from_numpy(mixed), vad, azi_list, white_snr, coherent_snr, rt60
+        return torch.from_numpy(mixed), vad, azi_list, white_snr, rt60
     
     
 class real_data_loader(datamake):
