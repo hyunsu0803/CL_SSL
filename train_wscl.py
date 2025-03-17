@@ -368,7 +368,7 @@ class Trainer():
             
         self.n_room = 8
         self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
-        for iter_num, (mixed, vad, speech_azi, speech_ele, white_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+        for iter_num, (mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
 
             mixed = mixed.to(self.hyperparameter.device)
             vad = vad.to(self.hyperparameter.device)
@@ -380,7 +380,7 @@ class Trainer():
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, white_snr, rt60, outputs, loss, embedding])
+            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60, outputs, loss, embedding])
             gc.collect()
             
             self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
@@ -401,7 +401,7 @@ class Trainer():
             # mixed : (16, 4, 64000)
             # speech_azi : (16, 1)
             # num_spk : (16)
-            for iter_num, (mixed, vad, speech_azi, white_snr, rt60) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
+            for iter_num, (mixed, vad, speech_azi, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
                                 
 
                 mixed=mixed.to(self.hyperparameter.device)

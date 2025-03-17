@@ -2,11 +2,11 @@ torch_start_method: 'spawn'
 randomseed: 0
 
 
-last_epoch: 200
+last_epoch: 35
 resume_epoch: 0
 
 GPGPU:
-  device_ids: [0, 1, 2, 3]
+  device_ids: [0]
 
 SCL: False
 finetune: True
