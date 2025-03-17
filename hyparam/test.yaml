@@ -6,15 +6,15 @@ resolution: 1
 acc_threshold: 5
 local_maximum_distance: 30
 
-SCL: True
+SCL: False
 finetune: True
 
-model_for_finetune: ./results_03071824_scl_doa/model_checkpoint/best_acc_model.tar
+model_for_finetune: ./results/model_checkpoint/best_loss_model.tar
 
 result_folder: 
   room_type: ['evaluation']
 
-  inference_folder: './results_03071824_scl_doa/'
+  inference_folder: './results/'
   
 
 

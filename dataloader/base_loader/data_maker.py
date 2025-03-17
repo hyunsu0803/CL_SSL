@@ -415,9 +415,9 @@ class speech_data_maker_for_scl(base_data_maker):
         save_dict['vad']=vad        # tensor
         save_dict['azi']=azi_list   # tensor
         save_dict['ele']=ele_list   # tensor
-        save_dict['white_snr_list']=white_snr_list  # list
-        save_dict['coherent_snr_list']=coherent_snr_list
-        save_dict['rt60_list']=rt60_list
+        save_dict['white_snr']=white_snr_list  # list
+        save_dict['coherent_snr']=coherent_snr_list
+        save_dict['rt60']=rt60_list
 
         
         pkl_name = list(azi_list[0].numpy()) + white_snr_list
