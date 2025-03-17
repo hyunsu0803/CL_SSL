@@ -350,7 +350,7 @@ class base_data_maker(datamake):
             azi_list_list.append(azi_list)
             ele_list_list.append(ele_list)
             white_snr_list.append(white_snr)
-            coherent_snr_list.append(coherent_snr)
+            coherent_snr_list.append(0)
             rt60_list.append(rt60)
         
         mixed = torch.stack(mixed_list)

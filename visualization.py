@@ -8,6 +8,8 @@ from tqdm import tqdm
 from dataloader.wrap_dataload import Synth_dataload, Real_dataload
 import matplotlib.pyplot as plt
 import metric
+from sklearn.manifold import TSNE
+import seaborn as sns
 
 
 class Hyparam_set():
@@ -128,27 +130,57 @@ class Tester():
 
             with torch.no_grad():
 
-                for iter_num, (mixed, vad, speech_azi, white_snr, rt60) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
+                embeddings_list = []
+                speech_azi_list = []
 
-                    mixed=mixed.to(self.hyperparameter.device)
-                    vad=vad.to(self.hyperparameter.device)
-                    speech_azi=speech_azi.to(self.hyperparameter.device)
+                for iter_num, (mixed, vad, speech_azi, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
 
-                    out, embedding, speech_azi = self.model(mixed, vad, speech_azi)
+                    mixed=mixed.to(self.hyperparameter.device)              # (1, 8, 4, 64000)
+                    vad=vad.to(self.hyperparameter.device)                  # (1, 8, 1, 64000)
+                    speech_azi=speech_azi.to(self.hyperparameter.device)    # (1, 8, 1)
 
-                    speech_azi=speech_azi.cpu().numpy()
-                    embedding=embedding.cpu().numpy()
+                    out, embedding, speech_azi = self.model(mixed, vad, speech_azi)     # embedding: (8, 256, 20), speech_azi: (8, 1)
 
+                    speech_azi=speech_azi.cpu().numpy().flatten()   # (8, )
+                    embedding=embedding.cpu().numpy()               # (8, 256, 20)
 
-                    selected_classes = np.arange(0, 31, 3)  # 0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30
-
-
+                    embedding_per_frame = np.transpose(embedding, (0, 2, 1)).reshape(-1, embedding.shape[1])  # (8, 20, 256) -> (8*20, 256)
+                    speech_azi_repeated = np.repeat(speech_azi, embedding.shape[-1])
                     
+                    embeddings_list.append(embedding_per_frame)
+                    speech_azi_list.extend(speech_azi_repeated)
 
-            break
+                selected_classes = np.arange(0, 31, 3)  # 0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30
+
+                embeddings_array = np.vstack(embeddings_list)
+                speech_azi_array = np.array(speech_azi_list)
+
+                mask = np.isin(speech_azi_array, selected_classes)
+
+                filtered_embeddings = embeddings_array[mask]
+                filtered_speech_azi = speech_azi_array[mask]
+
+                tsne = TSNE(n_components=2, perplexity=30, random_state=42)
+                embeddings_2d = tsne.fit_transform(filtered_embeddings)
+
+                palette = sns.color_palette("hsv", len(selected_classes))
+                color_map = {azi: palette[i] for i, azi in enumerate(selected_classes)}
+                colors = [color_map[azi] for azi in filtered_speech_azi]
 
 
+                plt.figure(figsize=(10, 8))
+                plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], c=colors, alpha=0.6, s=10)
 
+                legend_handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map[azi], markersize=6)
+                                for azi in selected_classes]
+                plt.legend(legend_handles, [str(azi) for azi in selected_classes], title="Speech Azi", loc='best')
+
+                plt.title("t-SNE Visualization of 256-Dimensional Embeddings (Per Time Frame)")
+                plt.xlabel("t-SNE Component 1")
+                plt.ylabel("t-SNE Component 2")
+                os.makedirs("./results_03051800_scl/visualization", exist_ok=True)
+                plt.savefig("./results_03051800_scl/visualization/t-SNE.png")
+                    
 
 if __name__=='__main__':
     args=sys.argv[1:]
