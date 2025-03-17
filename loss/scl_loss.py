@@ -64,7 +64,12 @@ class Weighted_SupConLoss(nn.Module):
 
     def process_silence(self, labels, mask):
         
-        silence_indices = torch.where(labels == 360)
+        silence_indices = torch.where(labels.view(-1) == 360)
+
+        if silence_indices[0].shape[0] == 0:
+            return mask
+
+        silence_indices = silence_indices[0]
         mask[silence_indices, :] = 0
         mask[:, silence_indices] = 0
 

@@ -117,7 +117,7 @@ class ConvSTFT(nn.Module):
             inputs = F.pad(inputs, [self.win_len-self.stride, self.win_len-self.stride])
             
             # NC x 2F x T
-            outputs = F.conv1d(inputs.float(), self.weight, stride=self.stride)
+            outputs = F.conv1d(inputs.float(), self.weight.to(inputs.device), stride=self.stride)
 
             # N x C x 2F x T
             outputs = outputs.view(N, C, -1, outputs.shape[-1])
@@ -130,7 +130,7 @@ class ConvSTFT(nn.Module):
             vad=vad.view(N*P, 1, L)
             vad=F.pad(vad, [self.win_len-self.stride, self.win_len-self.stride])
 
-            vad=F.conv1d(vad.float(), self.vad_kernel, stride=self.stride)
+            vad=F.conv1d(vad.float(), self.vad_kernel.to(vad.device), stride=self.stride)
             vad=vad.view(N, P, -1).ge(self.vad_threshold).long()
             
 
