@@ -374,7 +374,7 @@ class train_data_maker_for_scl(base_data_maker):
         self.max_num_people = 1
         
     def __len__(self):
-        return 361
+        return 360
         
     def __getitem__(self, idx):
         return self.arrange_data(idx)
@@ -404,7 +404,7 @@ class speech_data_maker_for_scl(base_data_maker):
         
     
     def __len__(self):
-        return 361
+        return 360
         
         
     def save_data(self, idx):

@@ -182,6 +182,6 @@ class main_model_for_scl(nn.Module):
 
         outputs, embedding = self.crn(ibRTF)    # (B, n, 128), (B, 256, n)
         
-        return outputs, embedding, azi_list
+        return outputs, embedding, azi_list, vad_block
     
 

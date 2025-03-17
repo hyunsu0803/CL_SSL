@@ -232,7 +232,7 @@ class main_model_for_doa(nn.Module):
         ibRTF, vad_block = self.prepro.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, num_spk, n)
 
         if self.use_scl:
-            z, embedding, azi_list = self.scl_model(mixed, vad, azi_list)
+            z, embedding, azi_list, vad_block = self.scl_model(mixed, vad, azi_list)
             embedding = embedding.unsqueeze(1)   # (B, 1, 256, n)
         else:
             embedding = ibRTF   # (B, 2(C-1), F, n)

@@ -117,13 +117,21 @@ class Learner_config():
             self.best_train_loss=-math.inf
 
 
-    def train_update(self, outputs, labels):
+    def train_update(self, outputs, labels, vad_block):
         # outputs : [(B, 128, n), (B, 128, n), (B, 128, n)]
         # labels : (B, 1)
+        # vad_block : (B, 1, n)
+
+
+        B, num_spk, n = vad_block.shape
+
+        vad_block_flat = vad_block.reshape(-1)  # (B*n)
+        labels = labels.repeat_interleave(n, dim=0)  # (B*n, 1)
+        labels[vad_block_flat==0] = 1000
 
 
         losses = []
-        labels = labels.repeat_interleave(outputs[0].shape[-1], dim=0)  # (B*n)
+
         for out, sigma in zip(outputs, self.sigma):
 
             out = out.permute(0, 2, 1)  # (B, n, 128)
@@ -152,19 +160,27 @@ class Learner_config():
         return loss_mean
 
 
-    def test_update(self, outputs, labels):
+    def test_update(self, outputs, labels, vad_block):
         # outputs : [(B, 128, n), (B, 128, n), (B, 128, n)]
         # labels : (B, 1)
+        # vad_block : (B, 1, n)
+
+
+        B, num_spk, n = vad_block.shape
+
+        vad_block_flat = vad_block.reshape(-1)  # (B*n)
+        labels = labels.repeat_interleave(n, dim=0)  # (B*n, 1)
+        labels[vad_block_flat==0] = 1000
 
 
         losses = []
-        labels = labels.repeat_interleave(outputs[0].shape[-1], dim=0)  # (B*n)
+
         for out, sigma in zip(outputs, self.sigma):
 
             out = out.permute(0, 2, 1)  # (B, n, 128)
             out = out.reshape(-1, out.shape[-1])  # (B*n, 128)
-            
-            
+
+
             loss_mean = self.loss_func(out, labels, sigma)
 
 
@@ -353,9 +369,10 @@ class Trainer():
             self.validation(epoch)           
             
             self.logger.epoch_finish(epoch, self.model, self.optimizer)
-            
-    
 
+            gc.collect()
+            torch.cuda.empty_cache()
+            
     
 
     def train(self, epoch):
@@ -374,13 +391,13 @@ class Trainer():
             vad = vad.to(self.hyperparameter.device)
             speech_azi = speech_azi.to(self.hyperparameter.device)
             
-            outputs, embedding, speech_azi = self.model(mixed, vad, speech_azi) # (B, 128, n), (B, 256, n) (B, 1)
+            outputs, embedding, speech_azi, vad_block = self.model(mixed, vad, speech_azi) # (B, 128, n), (B, 256, n) (B, 1)
             
-            loss = self.learner.train_update(outputs, speech_azi)
+            loss = self.learner.train_update(outputs, speech_azi, vad_block)
                 
 
             self.logger.train_iter_log(loss)
-            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60, outputs, loss, embedding])
+            self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60, outputs, loss, embedding, vad_block])
             gc.collect()
             
             self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
@@ -408,13 +425,13 @@ class Trainer():
                 vad=vad.to(self.hyperparameter.device)
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
-                out, embedding, speech_azi = self.model(mixed, vad, speech_azi)
+                outputs, embedding, speech_azi, vad_block = self.model(mixed, vad, speech_azi)
                 
-                loss=self.learner.test_update(out, speech_azi)
+                loss=self.learner.test_update(outputs, speech_azi, vad_block)
                     
                     
                 self.logger.test_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, out, loss, embedding])
+                self.learner.memory_delete([mixed, vad, speech_azi, white_snr, coherent_snr, rt60, outputs, loss, embedding, vad_block])
                 gc.collect()
              
             self.logger.test_epoch_log(self.optimizer_scheduler)
