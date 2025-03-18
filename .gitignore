@@ -4,7 +4,6 @@ dataloader/random_gpu_rir_generator/__pycache__/
 dataloader/base_loader/__pycache__/
 metric/__pycache__/
 prepared/
-baseline/__pycache__/pc_1 mic_gray_azimuth_60_elevation_95_wavfile_SMG_distance_15.wav
-pc_1 mic_gray_azimuth_60_elevation_95_wavfile_SMG_distance_15.wav
 __pycache__/
 wandb/
+SSL_src/models/Causal_CRN_SPL_target/CL_CRN.py
