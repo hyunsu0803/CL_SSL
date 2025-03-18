@@ -63,7 +63,7 @@ class Learner_config():
         
         self.model=model_dir.get_model_for_scl(self.args['model']).to(self.device)
 
-        self.args['hyparam']['model_for_finetune'] = "./results_03051800_scl/model_checkpoint/best_model.tar"
+        self.args['hyparam']['model_for_finetune'] = "./results/model_checkpoint/best_model.tar"
 
         if self.args['hyparam']['finetune']:
             trained=torch.load(self.args['hyparam']['model_for_finetune'], map_location=self.device)     
@@ -139,18 +139,22 @@ class Tester():
                     vad=vad.to(self.hyperparameter.device)                  # (1, 8, 1, 64000)
                     speech_azi=speech_azi.to(self.hyperparameter.device)    # (1, 8, 1)
 
-                    out, embedding, speech_azi = self.model(mixed, vad, speech_azi)     # embedding: (8, 256, 20), speech_azi: (8, 1)
+                    out, embedding, speech_azi, vad_block = self.model(mixed, vad, speech_azi)     # embedding: (8, 256, 20), speech_azi: (8, 1)
 
                     speech_azi=speech_azi.cpu().numpy().flatten()   # (8, )
                     embedding=embedding.cpu().numpy()               # (8, 256, 20)
+                    vad_block=vad_block.cpu().numpy()               # (8, 1, 20)
 
                     embedding_per_frame = np.transpose(embedding, (0, 2, 1)).reshape(-1, embedding.shape[1])  # (8, 20, 256) -> (8*20, 256)
-                    speech_azi_repeated = np.repeat(speech_azi, embedding.shape[-1])
+                    speech_azi_repeated = np.repeat(speech_azi, embedding.shape[-1])                            # (8*20,)
+
+                    vad_block_flat = vad_block.reshape(-1)  # (8*20,)
+                    speech_azi_repeated[vad_block_flat == 0] = 1000
                     
                     embeddings_list.append(embedding_per_frame)
                     speech_azi_list.extend(speech_azi_repeated)
 
-                selected_classes = np.arange(0, 31, 3)  # 0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30
+                selected_classes = np.array([0, 20, 60, 180, 300])  # 0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 1000
 
                 embeddings_array = np.vstack(embeddings_list)
                 speech_azi_array = np.array(speech_azi_list)
@@ -178,8 +182,8 @@ class Tester():
                 plt.title("t-SNE Visualization of 256-Dimensional Embeddings (Per Time Frame)")
                 plt.xlabel("t-SNE Component 1")
                 plt.ylabel("t-SNE Component 2")
-                os.makedirs("./results_03051800_scl/visualization", exist_ok=True)
-                plt.savefig("./results_03051800_scl/visualization/t-SNE.png")
+                os.makedirs("./results/visualization", exist_ok=True)
+                plt.savefig("./results/visualization/t-SNE.png")
                     
 
 if __name__=='__main__':

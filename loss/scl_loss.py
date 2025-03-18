@@ -60,24 +60,7 @@ class Weighted_SupConLoss(nn.Module):
         
         return mask
     
-
-    def process_silence(self, labels, mask):
-        
-        silence_indices = torch.where(labels.view(-1) == 360)
-
-        if silence_indices[0].shape[0] == 0:
-            return mask
-
-        silence_indices = silence_indices[0]
-        mask[silence_indices, :] = 0
-        mask[:, silence_indices] = 0
-
-        for i in silence_indices:
-            for j in silence_indices:
-                mask[i, j] = 1
-        
-        return mask
-            
+          
 
     def forward(self, features, labels, sigma):
 
@@ -98,12 +81,10 @@ class Weighted_SupConLoss(nn.Module):
 
         if sigma == 0:
             mask = torch.eq(labels, labels.T).float().to(self.device)   # (B, B)
-            # mask = self.process_silence(labels, mask)
         else:
             self.sigma = torch.tensor(sigma)
             self.labelling = self.generate_weight().to(self.device)
             mask = self.generate_mask(labels).to(self.device)           # (B, B)
-            # mask = self.process_silence(labels, mask)
 
 
 
