@@ -328,6 +328,7 @@ class base_data_maker(datamake):
     
 
     def arrange_data(self, idx):
+
         azimuth_deg = idx
         
         mixed_list = []
@@ -338,20 +339,33 @@ class base_data_maker(datamake):
         azi_list_list = []
         ele_list_list = []
 
-        
-        for room_info in self.rooms:
-            # tensor, tensor, tensor,   float     # tensor는 model에 들어감
-            mixed, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx=None, 
-                                                                    room_info=room_info, 
-                                                                    azimuth_deg=azimuth_deg, 
-                                                                    with_coherent_noise=False)
-            mixed_list.append(mixed)
-            vad_list.append(vad)
-            azi_list_list.append(azi_list)
-            ele_list_list.append(ele_list)
-            white_snr_list.append(white_snr)
-            coherent_snr_list.append(0)
-            rt60_list.append(rt60)
+
+        if len(self.rooms) == 0:
+            for i in range(8):
+                mixed, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx+i, with_coherent_noise=False)
+                
+                mixed_list.append(mixed)
+                vad_list.append(vad)
+                azi_list_list.append(azi_list)
+                ele_list_list.append(ele_list)
+                white_snr_list.append(white_snr)
+                coherent_snr_list.append(0)
+                rt60_list.append(rt60)
+
+        else:
+            for room_info in self.rooms:
+                # tensor, tensor, tensor,   float     # tensor는 model에 들어감
+                mixed, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx=None, 
+                                                                        room_info=room_info, 
+                                                                        azimuth_deg=azimuth_deg, 
+                                                                        with_coherent_noise=False)
+                mixed_list.append(mixed)
+                vad_list.append(vad)
+                azi_list_list.append(azi_list)
+                ele_list_list.append(ele_list)
+                white_snr_list.append(white_snr)
+                coherent_snr_list.append(0)
+                rt60_list.append(rt60)
         
         mixed = torch.stack(mixed_list)
         vad = torch.stack(vad_list)
