@@ -6,11 +6,11 @@ last_epoch: 400
 resume_epoch: 0
 
 GPGPU:
-  device_ids: [0]
+  device_ids: [0, 1, 2, 3]
 
 SCL: True
 finetune: False
 # finetune : False
-trained_scl_model_path: ./results_03051800_scl/model_checkpoint/best_model.tar   # for initial scl+doa training
+trained_scl_model_path: ./results_03181719_scl/model_checkpoint/best_model.tar   # for initial scl+doa training
 # finetune : True
 model_for_finetune: ./results/model_checkpoint/last_model.tar  # only for fine-tuning

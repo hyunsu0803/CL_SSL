@@ -76,7 +76,7 @@ class Prepro():
         active_block_list = []
         for spk in range(num_spk):
             active_frames = [len(torch.nonzero(block_vad_frame[b, spk] == 1, as_tuple=True)[0]) for b in range(block_vad_frame.shape[0])]
-            active_frames = [ 1 if idx > 20 else 0 for idx in active_frames ]    # (B*n)
+            active_frames = [ 1 if idx > 5 else 0 for idx in active_frames ]    # (B*n)
             active_block = torch.tensor(active_frames, device=block_stft.device)   # (B*n)
             active_block_list.append(active_block)
 

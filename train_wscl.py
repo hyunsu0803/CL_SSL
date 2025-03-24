@@ -127,7 +127,9 @@ class Learner_config():
 
         vad_block_flat = vad_block.reshape(-1)  # (B*n)
         labels = labels.repeat_interleave(n, dim=0)  # (B*n, 1)
-        labels[vad_block_flat==0] = 1000
+        labels[vad_block_flat==0] = 360
+        labels[labels == 360] = 1000
+
 
 
         losses = []
@@ -170,7 +172,8 @@ class Learner_config():
 
         vad_block_flat = vad_block.reshape(-1)  # (B*n)
         labels = labels.repeat_interleave(n, dim=0)  # (B*n, 1)
-        labels[vad_block_flat==0] = 1000
+        labels[vad_block_flat==0] = 360
+        labels[labels == 360] = 1000
 
 
         losses = []
