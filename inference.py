@@ -419,9 +419,9 @@ class Tester():
         plt.xlabel('Time frame')
         plt.ylabel('Source angle')
         plt.title('Target DOA spatial spectrum')
-        os.makedirs('./results/pngs/', exist_ok=True)
+        os.makedirs(self.logger.result_folder['inference_folder'] + '/pngs/', exist_ok=True)
         plt.tight_layout()
-        plt.savefig('./results/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
+        plt.savefig(self.logger.result_folder['inference_folder'] + '/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
         plt.close()
 
 
