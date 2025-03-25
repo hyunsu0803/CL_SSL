@@ -10,6 +10,7 @@ from tqdm import tqdm
 from dataloader.wrap_dataload import Train_dataload_for_doa, Synth_dataload, Real_dataload
 import pandas as pd
 import gc
+import metric
 
 
 
@@ -221,30 +222,33 @@ class Logger_config():
             None
         self.epoch_train_loss.append(loss.cpu().detach().item())
 
-    def train_iter_metric_log(self, out, target, speech_azi):
+    def train_iter_metric_log(self, out, target, speech_azi, vad_block):
 
-        out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, n)           
-        target=target.cpu().numpy()                 
-        speech_azi=speech_azi.cpu().numpy()         # (B, 1)
+        out=out.sigmoid().detach().cpu()    # (B, 3, 360, n)           
+        target=target.cpu()                 
+        speech_azi=speech_azi.cpu()         # (B, 1)
 
-        batch_size = out.shape[0]
+        num_spk = vad_block.sum(axis=1).max()       # (1, )
+        num_spk = num_spk.item()
+        total_argmax_acc, total_softmax_acc, total_half_softmax_acc, \
+            total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, \
+                number_of_degrees_to_estimate=metric.mae.calc_mae(out, target, vad_block, num_spk, speech_azi,\
+                                                            calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
+                                                                acc_threshold=self.args['hyparam']['acc_threshold'],\
+                                                                    local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
+        
+        now_dict=self.save_train_config_dict
+        
+        now_dict['argmax_acc']+=total_argmax_acc
+        now_dict['softmax_acc']+=total_softmax_acc
+        now_dict['half_softmax_acc']+=total_half_softmax_acc
+     
+        now_dict['argmax_doa_error']+=total_argmax_doa_error
+        now_dict['softmax_doa_error']+=total_softmax_doa_error
+        now_dict['half_softmax_doa_error']+=total_half_softmax_doa_error
 
-        for b in range(batch_size):
-            output_azi = out[b, 2].argmax(axis=0)  # (n,)
-            vad_bool = target[b, 2].sum(axis=0) > 0  # (n,)
-            ans_azi = speech_azi[b, 0]  # (1,)
+        now_dict['number_of_degrees']+=number_of_degrees_to_estimate
 
-            error = np.abs(output_azi - ans_azi)
-            error = np.minimum(error, 360 - error)
-
-            for i, vad in enumerate(vad_bool):
-                if vad:
-
-                    self.save_train_config_dict['total_error_sum'] += error[i]
-                    self.save_train_config_dict['number_of_blocks'] += 1
-
-                    if error[i] <= 10:
-                        self.save_train_config_dict['acc_10'] += 1
 
        
     def train_epoch_loss_log(self):
@@ -265,21 +269,34 @@ class Logger_config():
 
     def train_epoch_metric_log(self,):
 
-        acc_10 = self.save_train_config_dict['acc_10'] / self.save_train_config_dict['number_of_blocks']
-        mae = self.save_train_config_dict['total_error_sum'] / self.save_train_config_dict['number_of_blocks']
+        now_dict=self.save_train_config_dict
 
-        self.csv_acc['train_epoch_acc'].append(acc_10)
-        self.csv_mae['train_epoch_mae'].append(mae)
+        argmax_acc = now_dict['argmax_acc'] / now_dict['number_of_degrees']
+        argmax_doa_error = now_dict['argmax_doa_error'] / now_dict['number_of_degrees']
+        softmax_acc = now_dict['softmax_acc'] / now_dict['number_of_degrees']
+        softmax_doa_error = now_dict['softmax_doa_error'] / now_dict['number_of_degrees']
+        half_softmax_acc = now_dict['half_softmax_acc'] / now_dict['number_of_degrees']
+        half_softmax_doa_error = now_dict['half_softmax_doa_error'] / now_dict['number_of_degrees']
 
-        if self.best_train_acc < acc_10:
-            self.best_train_acc = acc_10
-        if self.best_train_mae > mae:
-            self.best_train_mae = mae
+        # self.csv_acc['argmax_acc'].append(argmax_acc)
+        # self.csv_mae['argmax_doa_error'].append(argmax_doa_error)
+        # self.csv_acc['softmax_acc'].append(softmax_acc)
+        # self.csv_mae['softmax_doa_error'].append(softmax_doa_error)
+        # self.csv_acc['half_softmax_acc'].append(half_softmax_acc)
+        # self.csv_mae['half_softmax_doa_error'].append(half_softmax_doa_error)
+
+        self.csv_acc['train_epoch_acc'].append(softmax_acc)
+        self.csv_mae['train_epoch_mae'].append(softmax_doa_error)
+
+        if self.best_train_acc < softmax_acc:
+            self.best_train_acc = softmax_acc
+        if self.best_train_mae > softmax_doa_error:
+            self.best_train_mae = softmax_doa_error
 
         try:
-            wandb.log({'train_epoch_acc':acc_10})
+            wandb.log({'train_epoch_acc':softmax_acc})
             wandb.log({'train_best_acc':self.best_train_acc})
-            wandb.log({'train_epoch_mae':mae})
+            wandb.log({'train_epoch_mae':softmax_doa_error})
             wandb.log({'train_best_mae':self.best_train_mae})
         except:
             None
@@ -300,28 +317,33 @@ class Logger_config():
             None
         self.epoch_test_loss.append(loss.cpu().detach().item())
 
-    def test_iter_metric_log(self, out, target, speech_azi):
+    def test_iter_metric_log(self, out, target, speech_azi, vad_block):
         
-        out=out.sigmoid().detach().cpu().numpy()    # (B, 3, 360, n)           
-        target=target.cpu().numpy()                 
-        speech_azi=speech_azi.cpu().numpy()         # (B, 1)
+        out=out.sigmoid().detach().cpu()    # (B, 3, 360, n)           
+        target=target.cpu()                 
+        speech_azi=speech_azi.cpu()         # (B, 1)
+        vad_block=vad_block.cpu()
 
-        output_azi = out[0,2].argmax(axis=0)        # (n, )
-        vad_bool = target[0,2].sum(axis=0) > 0     # (n, )
-        ans_azi = speech_azi[0,0]                   # (1, )
+        num_spk = vad_block.sum(axis=1).max()       # (1, )
+        num_spk = num_spk.item()
+        total_argmax_acc, total_softmax_acc, total_half_softmax_acc, \
+            total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, \
+                number_of_degrees_to_estimate=metric.mae.calc_mae(out, target, vad_block, num_spk, speech_azi,\
+                                                            calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
+                                                                acc_threshold=self.args['hyparam']['acc_threshold'],\
+                                                                    local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
+        
+        now_dict=self.save_test_config_dict
+        
+        now_dict['argmax_acc']+=total_argmax_acc
+        now_dict['softmax_acc']+=total_softmax_acc
+        now_dict['half_softmax_acc']+=total_half_softmax_acc
+     
+        now_dict['argmax_doa_error']+=total_argmax_doa_error
+        now_dict['softmax_doa_error']+=total_softmax_doa_error
+        now_dict['half_softmax_doa_error']+=total_half_softmax_doa_error
 
-
-        error = abs(output_azi - ans_azi)
-        error = np.minimum(error, 360-error)
-
-        for i, vad in enumerate(vad_bool):
-            if vad:
-
-                self.save_test_config_dict['total_error_sum'] += error[i]
-                self.save_test_config_dict['number_of_blocks'] += 1
-
-                if error[i] <= 10:
-                    self.save_test_config_dict['acc_10'] += 1
+        now_dict['number_of_degrees']+=number_of_degrees_to_estimate
 
 
     def test_epoch_loss_log(self, optimizer_scheduler):
@@ -343,26 +365,40 @@ class Logger_config():
 
     def test_epoch_metric_log(self,):
 
-        acc_10 = self.save_test_config_dict['acc_10'] / self.save_test_config_dict['number_of_blocks']
-        mae = self.save_test_config_dict['total_error_sum'] / self.save_test_config_dict['number_of_blocks']
+        now_dict=self.save_train_config_dict
 
-        self.csv_acc['test_epoch_acc'].append(acc_10)
-        self.csv_mae['test_epoch_mae'].append(mae)
+        argmax_acc = now_dict['argmax_acc'] / now_dict['number_of_degrees']
+        argmax_doa_error = now_dict['argmax_doa_error'] / now_dict['number_of_degrees']
+        softmax_acc = now_dict['softmax_acc'] / now_dict['number_of_degrees']
+        softmax_doa_error = now_dict['softmax_doa_error'] / now_dict['number_of_degrees']
+        half_softmax_acc = now_dict['half_softmax_acc'] / now_dict['number_of_degrees']
+        half_softmax_doa_error = now_dict['half_softmax_doa_error'] / now_dict['number_of_degrees']
+
+        # self.csv_acc['argmax_acc'].append(argmax_acc)
+        # self.csv_mae['argmax_doa_error'].append(argmax_doa_error)
+        # self.csv_acc['softmax_acc'].append(softmax_acc)
+        # self.csv_mae['softmax_doa_error'].append(softmax_doa_error)
+        # self.csv_acc['half_softmax_acc'].append(half_softmax_acc)
+        # self.csv_mae['half_softmax_doa_error'].append(half_softmax_doa_error)
+
+        self.csv_acc['test_epoch_acc'].append(softmax_acc)
+        self.csv_mae['test_epoch_mae'].append(softmax_doa_error)
+
 
         self.model_save_acc = False
-        if self.best_test_acc < acc_10:
-            self.best_test_acc = acc_10
+        if self.best_test_acc < softmax_acc:
+            self.best_test_acc = softmax_acc
             self.model_save_acc = True
 
         self.model_save_mae = False
-        if self.best_test_mae > mae:
-            self.best_test_mae = mae
+        if self.best_test_mae > softmax_doa_error:
+            self.best_test_mae = softmax_doa_error
             self.model_save_mae = True
 
         try:
-            wandb.log({'test_epoch_acc':acc_10})
+            wandb.log({'test_epoch_acc':softmax_acc})
             wandb.log({'test_best_acc':self.best_test_acc})
-            wandb.log({'test_epoch_mae':mae})
+            wandb.log({'test_epoch_mae':softmax_doa_error})
             wandb.log({'test_best_mae':self.best_test_mae})
         except:
             None
@@ -380,15 +416,24 @@ class Logger_config():
         self.epoch_train_loss=[]
         self.epoch_test_loss=[]
 
-        self.save_train_config_dict=dict()
-        self.save_train_config_dict['acc_10']=0
-        self.save_train_config_dict['total_error_sum']=0
-        self.save_train_config_dict['number_of_blocks']=0
+        self.save_train_config_dict={}
+        self.save_train_config_dict['argmax_acc']=0
+        self.save_train_config_dict['argmax_doa_error']=0
+        self.save_train_config_dict['softmax_acc']=0
+        self.save_train_config_dict['softmax_doa_error']=0
+        self.save_train_config_dict['half_softmax_acc']=0
+        self.save_train_config_dict['half_softmax_doa_error']=0
+        self.save_train_config_dict['number_of_degrees']=0
 
-        self.save_test_config_dict=dict()
-        self.save_test_config_dict['acc_10']=0
-        self.save_test_config_dict['total_error_sum']=0
-        self.save_test_config_dict['number_of_blocks']=0
+        self.save_test_config_dict={}
+        self.save_test_config_dict['argmax_acc']=0
+        self.save_test_config_dict['argmax_doa_error']=0
+        self.save_test_config_dict['softmax_acc']=0
+        self.save_test_config_dict['softmax_doa_error']=0
+        self.save_test_config_dict['half_softmax_acc']=0
+        self.save_test_config_dict['half_softmax_doa_error']=0
+        self.save_test_config_dict['number_of_degrees']=0
+
     
 
     def epoch_finish(self, epoch, model, optimizer):
@@ -413,21 +458,21 @@ class Logger_config():
             torch.save(checkpoint, self.model_save_dir + "best_loss_model.tar")
             print("new best model - loss\n")
 
-        if self.model_save_mae:
-            os.makedirs(os.path.dirname(self.model_save_dir + "best_mae_model.tar"), exist_ok=True)
-            torch.save(checkpoint, self.model_save_dir + "best_mae_model.tar")
-            print("new best model - mae\n")
+        # if self.model_save_mae:
+        #     os.makedirs(os.path.dirname(self.model_save_dir + "best_mae_model.tar"), exist_ok=True)
+        #     torch.save(checkpoint, self.model_save_dir + "best_mae_model.tar")
+        #     print("new best model - mae\n")
 
-        if self.model_save_acc:
-            os.makedirs(os.path.dirname(self.model_save_dir + "best_acc_model.tar"), exist_ok=True)
-            torch.save(checkpoint, self.model_save_dir + "best_acc_model.tar")
-            print("new best model - acc\n")
+        # if self.model_save_acc:
+        #     os.makedirs(os.path.dirname(self.model_save_dir + "best_acc_model.tar"), exist_ok=True)
+        #     torch.save(checkpoint, self.model_save_dir + "best_acc_model.tar")
+            # print("new best model - acc\n")
 
 
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar".format(epoch))
         util.util.draw_result_pic(self.loss_png_dir, epoch, self.csv_loss['train_epoch_loss'],  self.csv_loss['test_epoch_loss'], 'loss')
-        util.util.draw_result_pic(self.acc_png_dir, epoch, self.csv_acc['test_epoch_acc'],  self.csv_acc['test_epoch_acc'], 'Acc')
-        util.util.draw_result_pic(self.mae_png_dir, epoch, self.csv_mae['test_epoch_mae'],  self.csv_mae['test_epoch_mae'], 'MAE')
+        # util.util.draw_result_pic(self.acc_png_dir, epoch, self.csv_acc['test_epoch_acc'],  self.csv_acc['test_epoch_acc'], 'Acc')
+        # util.util.draw_result_pic(self.mae_png_dir, epoch, self.csv_mae['test_epoch_mae'],  self.csv_mae['test_epoch_mae'], 'MAE')
 
 
     def wandb_config(self):
@@ -520,14 +565,14 @@ class Trainer():
                 
 
             self.logger.train_iter_loss_log(loss)
-            self.logger.train_iter_metric_log(out, target, speech_azi)
+            # self.logger.train_iter_metric_log(out, target, speech_azi, vad_block)
 
             self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60, out, loss, target])
             gc.collect()
         
         
         self.logger.train_epoch_loss_log()
-        self.logger.train_epoch_metric_log()
+        # self.logger.train_epoch_metric_log()
 
  
     def validation(self, epoch):
@@ -556,14 +601,14 @@ class Trainer():
                     
                     
                 self.logger.test_iter_loss_log(loss)
-                self.logger.test_iter_metric_log(out, target, speech_azi)
+                # self.logger.test_iter_metric_log(out, target, speech_azi, vad_block)
 
                 self.learner.memory_delete([mixed, vad, speech_azi, out, loss, target, white_snr, coherent_snr, rt60])
                 gc.collect()
              
             
             self.logger.test_epoch_loss_log(self.optimizer_scheduler)
-            self.logger.test_epoch_metric_log()
+            # self.logger.test_epoch_metric_log()
             
 
 

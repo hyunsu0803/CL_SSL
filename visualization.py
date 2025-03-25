@@ -149,7 +149,8 @@ class Tester():
                     speech_azi_repeated = np.repeat(speech_azi, embedding.shape[-1])                            # (8*20,)
 
                     vad_block_flat = vad_block.reshape(-1)  # (8*20,)
-                    speech_azi_repeated[vad_block_flat == 0] = 1000
+                    speech_azi_repeated[vad_block_flat == 0] = 360
+                    speech_azi_repeated[speech_azi_repeated == 360] = 1000
                     
                     embeddings_list.append(embedding_per_frame)
                     speech_azi_list.extend(speech_azi_repeated)

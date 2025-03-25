@@ -1,14 +1,16 @@
 torch_start_method: 'spawn'
 randomseed: 0
 
+acc_threshold: 10
+local_maximum_distance: 30
 
 last_epoch: 400
 resume_epoch: 0
 
 GPGPU:
-  device_ids: [0, 1, 2, 3]
+  device_ids: [0]
 
-SCL: True
+SCL: False
 finetune: False
 # finetune : False
 trained_scl_model_path: ./results_03181719_scl/model_checkpoint/best_model.tar   # for initial scl+doa training

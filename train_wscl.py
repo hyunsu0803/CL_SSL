@@ -206,7 +206,7 @@ class Learner_config():
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()
-        self.sigma = [0, 3, 9]
+        self.sigma = [0] # [0, 3, 9]
         return self.args
 
 
