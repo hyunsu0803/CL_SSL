@@ -43,7 +43,7 @@ class Prepro():
 
 
         block_stft = stft.reshape(B, C, F, block_num, block_size)   # (B, C, F, n, s)
-        block_vad_frame = vad_frame.reshape(B, vad_frame.shape[1], block_num, block_size)  # (B, 1, n, s)
+        block_vad_frame = vad_frame.reshape(B, vad_frame.shape[1], block_num, block_size)  # (B, num_spk, n, s)
         
 
         return block_stft, block_vad_frame

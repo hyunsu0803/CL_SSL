@@ -61,39 +61,42 @@ class real_data_loader(datamake):
         
         self.args=args
         
-        self.csv_dir = 'STARSS23/metadata_dev/'
-        self.wav_dir = 'STARSS23/mic_dev/'
-        self.vad_dir = 'STARSS23/mic_dev_vad/'
-        self.label_dir = 'STARSS23/mic_dev_label/'
-        
-        self.csv_list = glob('STARSS23/metadata_dev/*/*.csv')
+        self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/*/*.pkl')
 
-
-        
         
     def __len__(self):
-        return len(self.csv_list)
+        return len(self.pkl_list)
     
     
     def  __getitem__(self, idx):
         
-        csv_file = self.csv_list[idx]
+        pkl_file = self.pkl_list[idx]
 
-        wav_file = csv_file.replace(self.csv_dir, self.wav_dir).replace('.csv', '.wav')
-        vad_file = csv_file.replace(self.csv_dir, self.vad_dir).replace('.csv', '.npy')
-        azi_file = csv_file.replace(self.csv_dir, self.label_dir).replace('.csv', '.npy')
+        pkl_file = open(pkl_file, 'rb')
+        data_dict = pickle.load(pkl_file)   # torch tensors
+        pkl_file.close()
         
-        mixed, fs = sf.read(wav_file, dtype='float32')
-        vad = np.load(vad_file)
-        azi = np.load(azi_file)
+        mixed = data_dict['mixed']      # (duration, n_channels)
+        vad_6 = data_dict['vad']
+        azi_list_6 = data_dict['azi']
+
+        vad = []
+        azi_list = []
+
+        for i in range(len(azi_list_6)):
+            if azi_list_6[i] is not None:
+                vad.append(vad_6[:, i])
+                azi_list.append(azi_list_6[i])
         
-            
+        vad = np.stack(vad, axis=0)     # (num_spk, duration)
+        mixed = mixed.T                 # (n_channels, duration)
+
+
         mixed=mixed.astype('float32')
         vad=vad.astype('float32')
-        azi=azi.astype('float32')
+
         
-        
-        return torch.from_numpy(mixed), torch.from_numpy(vad), torch.from_numpy(azi)
+        return torch.from_numpy(mixed), torch.from_numpy(vad), torch.tensor(azi_list), 0, 0, 0
 
 
         

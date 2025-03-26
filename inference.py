@@ -373,8 +373,8 @@ class Dataloader_config():
 
     
     def config(self):
-        self.test_loader=Synth_dataload(self.args['dataloader']['test']['loader'])
-        # self.test_loader = Real_dataload(self.args['dataloader']['test']['loader'])
+        # self.test_loader=Synth_dataload(self.args['dataloader']['test']['loader'])
+        self.test_loader = Real_dataload(self.args['dataloader']['test']['loader'])
        
         return self.args
     
@@ -421,7 +421,7 @@ class Tester():
         plt.title('Target DOA spatial spectrum')
         os.makedirs(self.logger.result_folder['inference_folder'] + '/pngs/', exist_ok=True)
         plt.tight_layout()
-        plt.savefig(self.logger.result_folder['inference_folder'] + '/pngs/' + pkl_idx.split('.')[0]+ '.png', dpi=600)
+        plt.savefig(self.logger.result_folder['inference_folder'] + '/pngs/' + pkl_idx.split('/')[-1].replace('.pkl', '.png'), dpi=600)
         plt.close()
 
 
@@ -450,7 +450,7 @@ class Tester():
                     vad_block=vad_block.cpu()           # (B, num_spk, n)
                     
                     pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
-                    # self.plot_out_target(out[0,2], target[0,2], pkl_idx)
+                    self.plot_out_target(out[0,2], target[0,2], pkl_idx)
 
                     num_spk = vad_block.sum(axis=1).max()       # (1, )
                     num_spk = num_spk.item()
