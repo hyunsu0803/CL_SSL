@@ -543,6 +543,7 @@ class Trainer():
             gc.collect()
             torch.cuda.empty_cache()
 
+        print('\n*** Training is finished ***\n')
         self.learner.memory_delete([self.dataloader])
     
 

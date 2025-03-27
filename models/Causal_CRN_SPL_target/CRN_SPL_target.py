@@ -153,7 +153,7 @@ class main_model_for_doa(nn.Module):
 
         if self.use_scl:
             self.config['CRN']['input_cnn_channel'] = 1
-            self.config['CRN']['GRU']['input_size'] = 1024
+            self.config['CRN']['GRU']['input_size'] = 2048
         else:
             self.config['CRN']['input_cnn_channel'] = 6
             self.config['CRN']['GRU']['input_size'] = 512
