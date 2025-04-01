@@ -1,4 +1,4 @@
-from .CRN_SPL_target import main_model_for_doa
+from .DOA_classifier import main_model_for_doa
 from .CL_CRN import main_model_for_scl
 
 def get_model_for_scl(args):

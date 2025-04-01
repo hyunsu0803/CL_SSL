@@ -6,7 +6,7 @@ resolution: 1
 acc_threshold: 10
 local_maximum_distance: 30
 
-SCL: False
+SCL: True
 finetune: True
 
 model_for_finetune: ./results/model_checkpoint/best_loss_model.tar

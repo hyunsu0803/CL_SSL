@@ -62,6 +62,7 @@ class real_data_loader(datamake):
         self.args=args
         
         self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/*/*.pkl')
+        # self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/dev-test-tau/*.pkl') + glob('/root/clssl/STARSS23/mic_dev_pkl/dev-train-tau/*.pkl')
 
         
     def __len__(self):
@@ -76,27 +77,16 @@ class real_data_loader(datamake):
         data_dict = pickle.load(pkl_file)   # torch tensors
         pkl_file.close()
         
-        mixed = data_dict['mixed']      # (duration, n_channels)
-        vad_6 = data_dict['vad']
-        azi_list_6 = data_dict['azi']
-
-        vad = []
-        azi_list = []
-
-        for i in range(len(azi_list_6)):
-            if azi_list_6[i] is not None:
-                vad.append(vad_6[:, i])
-                azi_list.append(azi_list_6[i])
-        
-        vad = np.stack(vad, axis=0)     # (num_spk, duration)
-        mixed = mixed.T                 # (n_channels, duration)
-
+        mixed = data_dict['mixed'].T      # (n_channels, duration)
+        vad = data_dict['vad']
+        target = data_dict['azi']
 
         mixed=mixed.astype('float32')
         vad=vad.astype('float32')
+        target=target.astype('int64')
 
         
-        return torch.from_numpy(mixed), torch.from_numpy(vad), torch.tensor(azi_list), 0, 0, 0
+        return torch.from_numpy(mixed), torch.from_numpy(vad), torch.tensor(target), 0, 0, 0
 
 
         

@@ -35,7 +35,7 @@ class Prepro():
 
 
         frame_num = stft.shape[-1]
-        block_size = 24
+        block_size = 25
         block_num = frame_num // block_size
         if frame_num % block_size != 0:
             stft = stft[..., :block_size*block_num]

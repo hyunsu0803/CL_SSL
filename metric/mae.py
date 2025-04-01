@@ -89,7 +89,7 @@ def find_max_point(maximum_distance, num_spk, data, ):
     return argmax_list, softmax_list, softmax_half_list
 
 
-def calc_mae_locata(output, target, vad, num_spk, azimuth, resolution=1, local_maximum_distance=10, calc_layer=[0], acc_threshold=5, ref_vec=90):
+def calc_mae_RD(output, target, resolution=1, local_maximum_distance=10, calc_layer=[2], acc_threshold=20, ref_vec=0):
  
     number_of_degrees_to_estimate=0
 
@@ -103,24 +103,24 @@ def calc_mae_locata(output, target, vad, num_spk, azimuth, resolution=1, local_m
 
     total_half_softmax_doa_error=0
 
+    print("output shape", output.shape)
+    print("target shape", target.shape)
     
     
-    
-    output=output.numpy()
-    azimuth=azimuth.repeat_interleave(len(calc_layer), 0)
-    
+    output=output.numpy()   # (1, 3, 360, n)
+    target=target.numpy()   # (1, 3, 360, n)
+
 
     for frame_num in range(output.shape[-1]):
 
-        vad_frame=vad[..., frame_num] # B, num_spk
+        target_frame=target[..., frame_num] # (B, 3, 360)
         
        
-        if vad_frame.any()==0: # no speech in the frame
-            
+        if target_frame.any()==0: # no speech in the frame
             continue
 
-        active_spk=np.where(vad_frame[0]==1)[0]    
-        active_spk_num=active_spk.shape[0]   
+        # active_spk=np.where(target_frame[0]==1)[0]    
+        # active_spk_num=active_spk.shape[0]   
        
         number_of_degrees_to_estimate+=1
 
