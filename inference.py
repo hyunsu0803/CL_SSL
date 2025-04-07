@@ -258,9 +258,9 @@ class Tester():
         plt.xlabel('Time frame')
         plt.ylabel('Source angle')
         plt.title('Target DOA spatial spectrum')
-        os.makedirs(self.logger.result_folder['inference_folder'] + '/pngs/', exist_ok=True)
+        os.makedirs(self.logger.result_folder['inference_folder'] + '/pngs/' + pkl_idx.split('/')[-2] + '/', exist_ok=True)
         plt.tight_layout()
-        plt.savefig(self.logger.result_folder['inference_folder'] + '/pngs/' + pkl_idx.split('/')[-1].replace('.pkl', '.png'), dpi=600)
+        plt.savefig(self.logger.result_folder['inference_folder'] + '/pngs/' + pkl_idx.split('/')[-2] + '/' + pkl_idx.split('/')[-1].replace('.pkl', '.png'), dpi=600)
         plt.close()
 
 
@@ -283,9 +283,6 @@ class Tester():
 
                     out, target, vad_block = self.model(mixed, vad, temp_azi)    # (B, 3, 360, n), (B, num_spk, n)
 
-                    print(out.shape)
-                    print(target.shape)
-                    print(pseudo_target.shape)
 
                     out=out.sigmoid().detach().cpu()  
                     target=target.cpu()               
@@ -293,17 +290,19 @@ class Tester():
                     vad_block=vad_block.cpu()           # (B, num_spk, n)
                     
                     pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
-                    self.plot_out_target(out[0,2], pseudo_target[0,2], pkl_idx)
+                    # self.plot_out_target(out[0,1], pseudo_target[0,1], pkl_idx)
 
                     total_argmax_acc, total_softmax_acc, total_half_softmax_acc, \
                         total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, \
-                            number_of_degrees_to_estimate=metric.mae.calc_mae_RD(out, pseudo_target,\
+                            number_of_degrees_to_estimate=metric.mae.calc_mae_RD(out, pseudo_target.long(),\
                                                                         calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
                                                                             acc_threshold=self.args['hyparam']['acc_threshold'],\
                                                                                 local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
 
 
-                    self.logger.error_update(room_type, total_argmax_acc, total_softmax_acc,total_half_softmax_acc, total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error,number_of_degrees_to_estimate)
+                    self.logger.error_update(room_type, total_argmax_acc, total_softmax_acc,total_half_softmax_acc, 
+                                             total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error,
+                                             number_of_degrees_to_estimate)
 
                     
                     self.learner.memory_delete([mixed, vad, pseudo_target, out, target])

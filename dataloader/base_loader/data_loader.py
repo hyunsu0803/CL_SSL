@@ -61,8 +61,8 @@ class real_data_loader(datamake):
         
         self.args=args
         
-        self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/*/*.pkl')
-        # self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/dev-test-tau/*.pkl') + glob('/root/clssl/STARSS23/mic_dev_pkl/dev-train-tau/*.pkl')
+        # self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/*/*.pkl')
+        self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/dev-test-tau/*.pkl') + glob('/root/clssl/STARSS23/mic_dev_pkl/dev-train-tau/*.pkl')
 
         
     def __len__(self):
@@ -83,7 +83,7 @@ class real_data_loader(datamake):
 
         mixed=mixed.astype('float32')
         vad=vad.astype('float32')
-        target=target.astype('int64')
+        target=target.astype('float32')
 
         
         return torch.from_numpy(mixed), torch.from_numpy(vad), torch.tensor(target), 0, 0, 0

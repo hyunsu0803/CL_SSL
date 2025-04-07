@@ -155,8 +155,8 @@ def make_vad_and_label():
         else:
             pseudo_target = pseudo_target[..., 1:-1]   # remove first and last frame
         n_layers, azi_size, num_event_frame = pseudo_target.shape
-        pseudo_target = pseudo_target.reshape(n_layers, azi_size, 2, -1)
-        pseudo_target = pseudo_target.max(axis=2)   # (3, 360, num_event_frame/2)
+        pseudo_target = pseudo_target.reshape(n_layers, azi_size, -1, 2)
+        pseudo_target = pseudo_target.max(axis=-1)   # (3, 360, num_event_frame/2)
 
         # plot_out_target(pseudo_target[0], pseudo_target[1], '22')
 
