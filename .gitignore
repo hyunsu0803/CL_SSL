@@ -6,4 +6,3 @@ metric/__pycache__/
 prepared/
 __pycache__/
 wandb/
-models/Causal_CRN_SPL_target/CL_CRN.py

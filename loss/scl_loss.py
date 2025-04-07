@@ -1,16 +1,11 @@
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
+import torch.nn as nn
 
 
 """
 Author: Yonglong Tian (yonglong@mit.edu)
 Date: May 07, 2020
 """
-
-
-import torch.nn as nn
-
 
 class Weighted_SupConLoss(nn.Module):
     """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.

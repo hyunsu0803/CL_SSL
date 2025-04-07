@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 
-class Prepro():
+class Processing():
 
     def __init__(self, stft_model):
 

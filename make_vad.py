@@ -23,10 +23,11 @@ def _cleanSilences(s, vad_tool, fs, aggressiveness, return_vad=False):
 
 
 def make_speech_vad(vad_tool, wav_folder, vad_folder):
-    key_list = ['train-clean-100']
-    # key_list = ['test-clean']
+    key_list = ['train-clean-100', 'test-clean']
 
     for key in key_list:
+
+        print(key)
 
         vad_dir=vad_folder[key]
         data_dir=wav_folder[key]

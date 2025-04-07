@@ -1,5 +1,5 @@
 from .FFT import ConvSTFT 
-from .prepro import Prepro
+from .input_process import Processing
 from torch import nn
 import torch
 import numpy as np
@@ -169,7 +169,7 @@ class main_model_for_doa(nn.Module):
         self.azi_size=360//self.degree_resolution
 
         self.stft_model=ConvSTFT(**self.config['FFT'])
-        self.prepro=Prepro(self.stft_model)
+        self.data_proc=Processing(self.stft_model)
         self.crn=crn(self.config['CRN'])
         
         self.model_select_for_scl_feature()     # self.scl_model
@@ -228,8 +228,8 @@ class main_model_for_doa(nn.Module):
         
     def forward(self, mixed, vad, azi_list):
 
-        block_stft, block_vad_frame = self.prepro.make_block(mixed, vad)
-        ibRTF, vad_block = self.prepro.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, num_spk, n)
+        block_stft, block_vad_frame = self.data_proc.make_block(mixed, vad)
+        ibRTF, vad_block = self.data_proc.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, num_spk, n)
 
         if self.use_scl:
             z, embedding, azi_list, vad_block = self.scl_model(mixed, vad, azi_list)

@@ -35,7 +35,7 @@ def delete_csv():
         if not has_0 and not has_1:
             print(f"Deleting: {csv_file}")
             os.remove(csv_file)
-            # os.remove(csv_file.replace('metadata_dev', 'mic_dev_downsampled').replace('.csv', '.wav'))
+            os.remove(csv_file.replace('metadata_dev', 'mic_dev_downsampled').replace('.csv', '.wav'))
         
 
 
@@ -58,7 +58,7 @@ def downsampling():
         output_wav = input_wav.replace(wav_dir, downsampled_dir)
         
 
-        y, sr = librosa.load(input_wav, sr=24000, mono=False)   # 
+        y, sr = librosa.load(input_wav, sr=24000, mono=False)   
         print("Original sampling rate:", sr)
 
         y_resampled = librosa.resample(y, orig_sr=sr, target_sr=target_sr, axis=-1)
