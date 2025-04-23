@@ -11,19 +11,23 @@ class Processing():
         self.eps = np.finfo(np.float32).eps
 
 
-    def permute_data(self, mixed, vad, speech_azi):
+    def permute_data(self, mixed_s, mixed_t, vad, speech_azi):
         
-        mixed = mixed.reshape(-1, mixed.shape[-2], mixed.shape[-1])
+        mixed_s = mixed_s.reshape(-1, mixed_s.shape[-2], mixed_s.shape[-1])
         vad = vad.reshape(-1, vad.shape[-2], vad.shape[-1])
         speech_azi = speech_azi.reshape(-1, speech_azi.shape[-1])
             
-        perm = torch.randperm(mixed.size(0)).to(mixed.device) # (size : 256)
+        perm = torch.randperm(mixed_s.size(0)).to(mixed_s.device) # (size : 256)
         
-        mixed = mixed.index_select(0, perm)  
+        mixed_s = mixed_s.index_select(0, perm)  
         vad = vad.index_select(0, perm)  
         speech_azi = speech_azi.index_select(0, perm)
+
+        if mixed_t is not None:
+            mixed_t = mixed_t.reshape(-1, mixed_t.shape[-2], mixed_t.shape[-1])
+            mixed_t = mixed_t.index_select(0, perm)
         
-        return mixed, vad, speech_azi
+        return mixed_s, mixed_t, vad, speech_azi
     
 
     def make_block(self, mixed, vad):

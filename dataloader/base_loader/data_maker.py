@@ -227,54 +227,13 @@ class base_data_maker(datamake):
 
     def __len__(self):
         return len(self.speech_csv)
+    
 
+    def multi_speaker_rir_convolve(self, speech_info, speech_rirs, azimuth_deg):
 
-    def make_data(self, idx=None, room_info=None, azimuth_deg=None, with_coherent_noise=False):
-        
-        if idx is None and room_info is None:
-            raise ValueError('idx or room_info must be given')
-        
-
-        num_spk=random.randint(1, self.max_num_people) 
-        
-        
-        rirs, azi_list, ele_list, rt60 = self.rir_maker.create_rir(num_spk=num_spk, 
-                                                with_coherent_noise=with_coherent_noise, 
-                                                mic_type=self.args['mic_type'], 
-                                                mic_num=self.args['mic_num'],
-                                                room_info=room_info,
-                                                azimuth_deg=azimuth_deg)
-            
- 
-        coherent_noise_snr=None
-        rired_noise_wav=None
-        
-        ####### coherent noise
-        if with_coherent_noise:
-            noise_rir=rirs[-1]
-            self.noise_rir_peak=self.rir_peak_find(noise_rir)
-            noise_wav=self.noise_load()
-            
-            rired_noise_wav=self.gpu_convolve(noise_wav, noise_rir)[:,self.noise_rir_peak:self.duration+self.noise_rir_peak]
-            coherent_noise_snr=np.random.uniform(*self.args['SNR'])
-        
-        speech_rirs=rirs[:num_spk]
-        azi_list=azi_list[:num_spk]
-        ele_list=ele_list[:num_spk]
-      
-      
-        ##### speech
-        
         rired_speech_list=[]
         vad_list=[]
         speech_start_point_list=[]
-        
-        if idx is None:     # scl
-            speech_info = room_info['speech_info']
-        else:               # doa
-            speech_info=self.select_different_speakers(self.speech_csv.iloc[idx:idx+1], num_spk)   
-
-        
 
         for spk_num, spk_info in enumerate(speech_info.iterrows()):
             
@@ -299,39 +258,108 @@ class base_data_maker(datamake):
             rired_speech_list.append(rired_speech)
             vad_list.append(vad_out)
             speech_start_point_list.append(start_point)
+
         
+        return rired_speech_list, vad_list, speech_start_point_list
+    
+
+    def speech_process(self, speech_rirs, num_spk, idx=None, speech_info=None, azimuth_deg=None):
+
+        if idx is None:     # scl
+            speech_info = speech_info
+        else:               # doa
+            speech_info = self.select_different_speakers(self.speech_csv.iloc[idx:idx+1], num_spk)  
+
+        rired_speech_list, vad_list, speech_start_point_list = self.multi_speaker_rir_convolve(speech_info, speech_rirs, azimuth_deg)
+        rired_speech_list = self.spk_mixer(rired_speech_list)
+
+        return rired_speech_list, vad_list, speech_start_point_list
+
+
+    def noise_process(self, noise_rir, rired_speech_list, speech_start_point_list, with_coherent_noise=False, teacher=False):
+        coherent_noise_snr=None
+        rired_noise_wav=None
+        
+        if with_coherent_noise:
+            self.noise_rir_peak=self.rir_peak_find(noise_rir)
+            noise_wav=self.noise_load()
+            
+            rired_noise_wav=self.gpu_convolve(noise_wav, noise_rir)[:,self.noise_rir_peak:self.duration+self.noise_rir_peak]
+            coherent_noise_snr=np.random.uniform(*self.args['SNR'])
+            
         
         white_noise_snr, normalize_factor=self.get_random_snr(self.white_noise_snr, self.normalize_factor_bound)
+        if teacher:
+            white_noise_snr = self.args['teacher_snr']
 
-        ####### spk mixer, normalizing speech
-        rired_speech_list=self.spk_mixer(rired_speech_list)
-        
-        ########### get vad     (1, 64000)
-        vad=self.get_vad(self.duration, vad_list, speech_start_point_list, self.max_num_people)
-        
-        ######## speech & noise   
         mixed=self.make_noisy(self.duration, rired_speech_list, white_noise_snr, normalize_factor, 
-                              speech_start_point_list, with_coherent_noise, coherent_noise_snr, rired_noise_wav)
+                            speech_start_point_list, with_coherent_noise, coherent_noise_snr, rired_noise_wav)
         mixed=self.clipping(mixed)
+
+        return mixed, white_noise_snr, coherent_noise_snr
+
+
+    def make_data(self, idx=None, room_info=None, azimuth_deg=None, with_coherent_noise=False, teacher=False):
+        
+        if idx is None and room_info is None:
+            raise ValueError('idx or room_info must be given')
+        
+
+        num_spk=random.randint(1, self.max_num_people) 
+        
+        
+        # rir 2 set for student & teacher (rir_list)
+        rir_list, azi_list, ele_list, rt60 = self.rir_maker.create_rir(num_spk=num_spk, 
+                                                with_coherent_noise=with_coherent_noise, 
+                                                mic_type=self.args['mic_type'], 
+                                                mic_num=self.args['mic_num'],
+                                                room_info=room_info,
+                                                azimuth_deg=azimuth_deg,
+                                                teacher=teacher)
+        
+
+        mixed_list = []
+
+        for i, rirs in enumerate(rir_list):
+
+            speech_rirs = rirs[:num_spk]
+            noise_rir = rirs[-1]
+
+            azi_list = azi_list[:num_spk]
+            ele_list = ele_list[:num_spk]
+            for j in range(self.max_num_people-num_spk):
+                azi_list.append(0)
+                ele_list.append(0)
+        
+            rired_speech_list, vad_list, speech_start_point_list = self.speech_process(speech_rirs,
+                                                                    num_spk,
+                                                                    idx=idx, 
+                                                                    speech_info=room_info['speech_info'], 
+                                                                    azimuth_deg=azimuth_deg)
+            
+            mixed, white_noise_snr, coherent_noise_snr = self.noise_process(noise_rir,
+                                                            rired_speech_list, 
+                                                            speech_start_point_list, 
+                                                            with_coherent_noise=with_coherent_noise, 
+                                                            teacher=bool(i))
+            
+            mixed_list.append(torch.from_numpy(mixed.astype('float32')))
       
 
-        for i in range(self.max_num_people-num_spk):
-            azi_list.append(0)
-            ele_list.append(0)
-        mixed=mixed.astype('float32')
-        vad=vad.astype('float32')        
-    
-        # vad & azi_list == torch.tensor
+
+        vad = self.get_vad(self.duration, vad_list, speech_start_point_list, self.max_num_people).astype('float32')
         vad, azi_list=self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)
         
-        return torch.from_numpy(mixed), vad, azi_list, torch.tensor(ele_list), white_noise_snr, coherent_noise_snr, rt60
+        
+        return mixed_list[0], mixed_list[1], vad, azi_list, torch.tensor(ele_list), white_noise_snr, coherent_noise_snr, rt60
     
 
-    def arrange_data(self, idx):
+    def arrange_data(self, idx, teacher=False):
 
         azimuth_deg = idx
         
-        mixed_list = []
+        mixed_s_list = []
+        mixed_t_list = []
         vad_list = []
         white_snr_list = []
         coherent_snr_list = []
@@ -342,9 +370,27 @@ class base_data_maker(datamake):
 
         if len(self.rooms) == 0:
             for i in range(8):
-                mixed, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx+i, with_coherent_noise=False)
-                
-                mixed_list.append(mixed)
+                mixed_s, mixed_t, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx+i, 
+                                                                        with_coherent_noise=False, 
+                                                                        teacher=teacher)
+                mixed_s_list.append(mixed_s)
+                mixed_t_list.append(mixed_t)
+                vad_list.append(vad)
+                azi_list_list.append(azi_list)
+                ele_list_list.append(ele_list)
+                white_snr_list.append(white_snr)
+                coherent_snr_list.append(0)
+                rt60_list.append(rt60)
+
+        elif len(self.rooms) == 1:
+            for i in range(8):
+                mixed_s, mixed_t, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx+i, 
+                                                                        room_info=self.rooms[0], 
+                                                                        azimuth_deg=azimuth_deg, 
+                                                                        with_coherent_noise=False,
+                                                                        teacher=teacher)
+                mixed_s_list.append(mixed_s)
+                mixed_t_list.append(mixed_t)
                 vad_list.append(vad)
                 azi_list_list.append(azi_list)
                 ele_list_list.append(ele_list)
@@ -354,12 +400,13 @@ class base_data_maker(datamake):
 
         else:
             for room_info in self.rooms:
-                # tensor, tensor, tensor,   float     # tensor는 model에 들어감
-                mixed, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx=None, 
+                mixed_s, mixed_t, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx=None, 
                                                                         room_info=room_info, 
                                                                         azimuth_deg=azimuth_deg, 
-                                                                        with_coherent_noise=False)
-                mixed_list.append(mixed)
+                                                                        with_coherent_noise=False,
+                                                                        teacher=teacher)
+                mixed_s_list.append(mixed_s)
+                mixed_t_list.append(mixed_t)
                 vad_list.append(vad)
                 azi_list_list.append(azi_list)
                 ele_list_list.append(ele_list)
@@ -367,13 +414,14 @@ class base_data_maker(datamake):
                 coherent_snr_list.append(0)
                 rt60_list.append(rt60)
         
-        mixed = torch.stack(mixed_list)
+        mixed_s = torch.stack(mixed_s_list)
+        mixed_t = torch.stack(mixed_t_list)
         vad = torch.stack(vad_list)
         azi_list = torch.stack(azi_list_list)
         ele_list = torch.stack(ele_list_list)
         
         
-        return mixed, vad, azi_list, ele_list, white_snr_list, coherent_snr_list, rt60_list
+        return mixed_s, mixed_t, vad, azi_list, ele_list, white_snr_list, coherent_snr_list, rt60_list
     
     
     def __getitem__(self, idx):
@@ -391,7 +439,7 @@ class train_data_maker_for_scl(base_data_maker):
         return 361
         
     def __getitem__(self, idx):
-        return self.arrange_data(idx)
+        return self.arrange_data(idx, teacher=True)
     
     
 class train_data_maker_for_doa(base_data_maker):

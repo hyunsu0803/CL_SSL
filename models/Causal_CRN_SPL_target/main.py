@@ -1,5 +1,5 @@
 from .DOA_classifier import main_model_for_doa
-from .CL_CRN import main_model_for_scl
+from .EMA_CL import main_model_for_scl
 
 def get_model_for_scl(args):
 

@@ -390,59 +390,16 @@ class acoustic_simulator_on_the_fly(simulator_common):
         return speech_pos, azi_deg, ele_deg
     
 
-    def create_param(self, num_spk, with_coherent_noise, mic_type, mic_num, room_info=None, azimuth_deg=None):
+    def create_pos_src(self, num_spk, with_coherent_noise, mic_type, mic_num, room_sz, azimuth_deg=None):
         
-        if room_info is not None:
-            room_sz, rt60, abs_weight = room_info['room_sz'], room_info['rt60'], room_info['abs_weight']
-        else:
-            room_sz, rt60, abs_weight = self.random_room_select()
-        
-        self.gpu_rir_param(room_sz, rt60, abs_weight)   # room_sz, beta, Tdiff, Tmax, nb_img setting
+
         
         whole_mic_setup = self.whole_mic_setup
         
         mic_orV = whole_mic_setup['mic_orV']    # ??
         whole_mic_original_pos = whole_mic_setup['mics_original_pos']
 
-        if mic_type=='whole':
-            mic_orV = whole_mic_setup['mic_orV']
-            n_mic = whole_mic_original_pos.shape[0]
-            
-        elif mic_type=='circular':
-            if mic_num==4:
-                target_mic_original_pos = whole_mic_original_pos[:4]
-               
-            elif mic_num==6:
-                target_mic_original_pos = whole_mic_original_pos[4:10]
-               
-            elif mic_num==8:
-                target_mic_original_pos = whole_mic_original_pos[10:18]
-
-        elif mic_type=='ellipsoid':
-            if mic_num==4:
-                target_mic_original_pos = whole_mic_original_pos[18:22]
-               
-            elif mic_num==6:
-                target_mic_original_pos = whole_mic_original_pos[22:28]
-               
-            elif mic_num==8:
-                target_mic_original_pos = whole_mic_original_pos[28:36]
-
-        elif mic_type=='linear':
-            if mic_num==4:
-                target_mic_original_pos = whole_mic_original_pos[38:42]
-               
-            elif mic_num==6:
-                target_mic_original_pos = whole_mic_original_pos[37:43]
-               
-            elif mic_num==8:
-                target_mic_original_pos = whole_mic_original_pos[36:44]
-                
-        elif mic_type=='miyungpa':
-            if mic_num==4:
-                target_mic_original_pos = whole_mic_original_pos[44:48]
-                
-        elif mic_type=='tetra':
+        if mic_type=='tetra':
             if mic_num==4:
                 target_mic_original_pos = whole_mic_original_pos[48:52]
         
@@ -485,16 +442,29 @@ class acoustic_simulator_on_the_fly(simulator_common):
      
         self.params['pos_src']=np.stack(speech_pos_list, axis=0)
  
-        return self.params, azi_list, ele_list, rt60
+        return self.params, azi_list, ele_list
 
 
-    def create_rir(self, num_spk=1, with_coherent_noise=True, mic_type='tetra', mic_num=4, room_info=None, azimuth_deg=None): 
+    def create_rir(self, num_spk=1, with_coherent_noise=True, mic_type='tetra', mic_num=4, room_info=None, azimuth_deg=None, teacher=False): 
         
-        self.params, azi_list, ele_list, rt60 = self.create_param(num_spk, with_coherent_noise, mic_type, mic_num, room_info=room_info, azimuth_deg=azimuth_deg)
-  
-        rirs = gpuRIR.simulateRIR(**self.params)    
+        if room_info is None:
+            room_sz, rt60, abs_weight = self.random_room_select()
+            room_info={'room_sz':room_sz, 'rt60':rt60, 'abs_weight':abs_weight}
 
-        return rirs, azi_list, ele_list, rt60
+        rir_list=[]
+
+        self.gpu_rir_param(room_info['room_sz'], room_info['rt60'], room_info['abs_weight'])   # room_sz, beta, Tdiff, Tmax, nb_img setting
+        self.params, azi_list, ele_list = self.create_pos_src(num_spk, with_coherent_noise, mic_type, mic_num, room_info['room_sz'], azimuth_deg=azimuth_deg)
+        rirs = gpuRIR.simulateRIR(**self.params)   
+        rir_list.append(rirs) 
+
+        if teacher:
+            teacher_rt60 = 0.2
+            self.gpu_rir_param(room_info['room_sz'], teacher_rt60, room_info['abs_weight'])
+            rirs = gpuRIR.simulateRIR(**self.params)
+            rir_list.append(rirs)
+
+        return rir_list, azi_list, ele_list, room_info['rt60']
     
 
      

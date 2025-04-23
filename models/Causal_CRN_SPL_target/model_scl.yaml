@@ -30,6 +30,10 @@ FFT:
   fft_len: 256
   vad_threshold: 0.6666
 
+
+momentum: 0.999
+
+
 CRN:
 
   input_cnn_channel: 6
