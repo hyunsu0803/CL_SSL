@@ -183,7 +183,7 @@ class main_model_for_doa(nn.Module):
 
         model_dir=importlib.import_module(model_import)
         
-        self.scl_model=model_dir.get_model_for_scl(self.config_scl)
+        self.scl_model=model_dir.get_model_for_scl(self.config_scl, doa=True)
 
         if self.use_scl and not self.finetune:
 
@@ -192,6 +192,8 @@ class main_model_for_doa(nn.Module):
             self.scl_model.load_state_dict(trained['model_state_dict'], )   
 
         self.scl_model.train()
+        for param in self.scl_model.encoder_t.parameters():
+            param.requires_grad = True
         
 
     def make_target(self, vad_block, azi):
@@ -232,13 +234,15 @@ class main_model_for_doa(nn.Module):
         ibRTF, vad_block = self.data_proc.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, num_spk, n)
 
         if self.use_scl:
-            z, embedding, azi_list, vad_block = self.scl_model(mixed, vad, azi_list)
-            embedding = embedding.unsqueeze(1)   # (B, 1, 256, n)
+            z, embedding, azi_list, vad_block = self.scl_model(mixed, mixed.copy(), vad, azi_list)
+            embedding_s, embedding_t = embedding
+            embedding_s = embedding_s.unsqueeze(1)   # (B, 1, 256, n)
+            embedding_t = embedding_t.unsqueeze(1)
         else:
             embedding = ibRTF   # (B, 2(C-1), F, n)
 
 
-        out=self.crn(embedding) # (B, 3, 360, n)
+        out=self.crn(embedding_t) # (B, 3, 360, n)
 
         target=self.make_target(vad_block, azi_list)   # (B, 3, 360, n)
 

@@ -305,6 +305,8 @@ class Logger_config():
         #     os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
         #     torch.save(checkpoint, self.model_save_dir + "best_model.tar")
         #     print("new best model\n")
+        
+        os.makedirs(os.path.dirname(self.model_save_dir + "last_model.tar"), exist_ok=True)
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar")
 
         if epoch % 50 == 0 and epoch > 0:

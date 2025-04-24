@@ -155,7 +155,7 @@ class CRN(nn.Module):
 
 
 class main_model_for_scl(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, doa=False):
         super(main_model_for_scl, self).__init__()
         
         self.config=config
@@ -169,9 +169,12 @@ class main_model_for_scl(nn.Module):
 
         self.encoder_s = CRN(self.config['CRN'])
         self.encoder_t = CRN(self.config['CRN'])
-        for param_s, param_t in zip(self.encoder_s.parameters(), self.encoder_t.parameters()):
-            param_t.data.copy_(param_s.data)
-            param_t.requires_grad = False
+
+        self.doa = doa
+        if not doa:
+            for param_s, param_t in zip(self.encoder_s.parameters(), self.encoder_t.parameters()):
+                param_t.data.copy_(param_s.data)
+                param_t.requires_grad = False
 
         self.m = self.config['momentum'] 
 
@@ -196,9 +199,11 @@ class main_model_for_scl(nn.Module):
         ibRTF_t, vad_block = self.data_proc.ib_RTF(block_stft_t, block_vad_frame)      # (B, 2(C-1), F, n), (B, n)
 
         outputs_s, embedding_s = self.encoder_s(ibRTF_s)    # (B, 128, n), (B, 256, n)
-        outputs_t, embedding_t = self.encoder_t(ibRTF_t)    # (B, 128, n), (B, 256, n)
+        with torch.no_grad():
+            self._momentum_update_key_encoder()
+            outputs_t, embedding_t = self.encoder_t(ibRTF_t)    # (B, 128, n), (B, 256, n)
 
-        # outputs, embedding = self.crn(ibRTF)    # (B, n, 128), (B, 256, n)
+
         outputs = [outputs_s, outputs_t]
         embedding = [embedding_s, embedding_t]
         
