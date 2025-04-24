@@ -263,10 +263,10 @@ class base_data_maker(datamake):
         return rired_speech_list, vad_list, speech_start_point_list
     
 
-    def speech_process(self, speech_rirs, num_spk, idx=None, speech_info=None, azimuth_deg=None):
+    def speech_process(self, speech_rirs, num_spk, idx=None, room_info=None, azimuth_deg=None):
 
         if idx is None:     # scl
-            speech_info = speech_info
+            speech_info = room_info['speech_info']
         else:               # doa
             speech_info = self.select_different_speakers(self.speech_csv.iloc[idx:idx+1], num_spk)  
 
@@ -334,7 +334,7 @@ class base_data_maker(datamake):
             rired_speech_list, vad_list, speech_start_point_list = self.speech_process(speech_rirs,
                                                                     num_spk,
                                                                     idx=idx, 
-                                                                    speech_info=room_info['speech_info'], 
+                                                                    room_info=room_info, 
                                                                     azimuth_deg=azimuth_deg)
             
             mixed, white_noise_snr, coherent_noise_snr = self.noise_process(noise_rir,
@@ -351,7 +351,7 @@ class base_data_maker(datamake):
         vad, azi_list=self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)
         
         
-        return mixed_list[0], mixed_list[1], vad, azi_list, torch.tensor(ele_list), white_noise_snr, coherent_noise_snr, rt60
+        return mixed_list, vad, azi_list, torch.tensor(ele_list), white_noise_snr, coherent_noise_snr, rt60
     
 
     def arrange_data(self, idx, teacher=False):

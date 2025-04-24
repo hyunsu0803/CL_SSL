@@ -555,7 +555,7 @@ class Trainer():
         
         for iter_num, (mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
                 
-            mixed=mixed.to(self.hyperparameter.device)
+            mixed=mixed[0].to(self.hyperparameter.device)
             vad=vad.to(self.hyperparameter.device)
             speech_azi=speech_azi.to(self.hyperparameter.device)
             

@@ -246,8 +246,10 @@ class Logger_config():
 
         self.csv['train_epoch_loss'].append(loss_mean)
 
+        self.model_save = False
         if self.best_train_loss > loss_mean:
             self.best_train_loss = loss_mean 
+            self.model_save = True
 
         try:
             wandb.log({'train_epoch_loss':loss_mean})
@@ -300,12 +302,12 @@ class Logger_config():
                 'optimizer': optimizer.state_dict()
             }
 
-        # os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
-        # if self.model_save:
-        #     os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
-        #     torch.save(checkpoint, self.model_save_dir + "best_model.tar")
-        #     print("new best model\n")
-        
+        os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
+        if self.model_save:
+            os.makedirs(os.path.dirname(self.model_save_dir + "best_model.tar"), exist_ok=True)
+            torch.save(checkpoint, self.model_save_dir + "best_model.tar")
+            print("new best model\n")
+
         os.makedirs(os.path.dirname(self.model_save_dir + "last_model.tar"), exist_ok=True)
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar")
 
@@ -418,9 +420,10 @@ class Trainer():
 
         
 
-        for iter_num, (mixed_s, mixed_t, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
+        for iter_num, (mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
             gc.collect()
 
+            mixed_s, mixed_t = mixed
             mixed_s = mixed_s.to(self.hyperparameter.device)
             mixed_t = mixed_t.to(self.hyperparameter.device)
             vad = vad.to(self.hyperparameter.device)
