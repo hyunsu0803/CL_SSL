@@ -199,9 +199,13 @@ class main_model_for_scl(nn.Module):
         ibRTF_t, vad_block = self.data_proc.ib_RTF(block_stft_t, block_vad_frame)      # (B, 2(C-1), F, n), (B, n)
 
         outputs_s, embedding_s = self.encoder_s(ibRTF_s)    # (B, 128, n), (B, 256, n)
-        with torch.no_grad():
-            self._momentum_update_key_encoder()
+        
+        if self.doa:
             outputs_t, embedding_t = self.encoder_t(ibRTF_t)    # (B, 128, n), (B, 256, n)
+        else:
+            with torch.no_grad():
+                self._momentum_update_key_encoder()
+                outputs_t, embedding_t = self.encoder_t(ibRTF_t)    # (B, 128, n), (B, 256, n)
 
 
         outputs = [outputs_s, outputs_t]

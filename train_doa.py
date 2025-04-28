@@ -554,7 +554,8 @@ class Trainer():
         torch.cuda.empty_cache()
         
         for iter_num, (mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
-                
+            gc.collect()
+            
             mixed=mixed[0].to(self.hyperparameter.device)
             vad=vad.to(self.hyperparameter.device)
             speech_azi=speech_azi.to(self.hyperparameter.device)
@@ -569,7 +570,7 @@ class Trainer():
             # self.logger.train_iter_metric_log(out, target, speech_azi, vad_block)
 
             self.learner.memory_delete([mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60, out, loss, target])
-            gc.collect()
+
         
         
         self.logger.train_epoch_loss_log()
