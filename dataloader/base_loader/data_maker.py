@@ -370,10 +370,9 @@ class base_data_maker(datamake):
 
         if len(self.rooms) == 0:
             for i in range(8):
-                mixed_list, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx+i, 
+                mixed_s, mixed_t, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx+i, 
                                                                         with_coherent_noise=False, 
                                                                         teacher=teacher)
-                mixed_s, mixed_t = mixed_list
                 mixed_s_list.append(mixed_s)
                 mixed_t_list.append(mixed_t)
                 vad_list.append(vad)
@@ -385,12 +384,11 @@ class base_data_maker(datamake):
 
         elif len(self.rooms) == 1:
             for i in range(8):
-                mixed_list, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx+i, 
+                mixed_s, mixed_t, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx+i, 
                                                                         room_info=self.rooms[0], 
                                                                         azimuth_deg=azimuth_deg, 
                                                                         with_coherent_noise=False,
                                                                         teacher=teacher)
-                mixed_s, mixed_t = mixed_list
                 mixed_s_list.append(mixed_s)
                 mixed_t_list.append(mixed_t)
                 vad_list.append(vad)
@@ -402,12 +400,11 @@ class base_data_maker(datamake):
 
         else:
             for room_info in self.rooms:
-                mixed_list, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx=None, 
+                mixed_s, mixed_t, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx=None, 
                                                                         room_info=room_info, 
                                                                         azimuth_deg=azimuth_deg, 
                                                                         with_coherent_noise=False,
                                                                         teacher=teacher)
-                mixed_s, mixed_t = mixed_list
                 mixed_s_list.append(mixed_s)
                 mixed_t_list.append(mixed_t)
                 vad_list.append(vad)
@@ -424,7 +421,7 @@ class base_data_maker(datamake):
         ele_list = torch.stack(ele_list_list)
         
         
-        return [mixed_s, mixed_t], vad, azi_list, ele_list, white_snr_list, coherent_snr_list, rt60_list
+        return mixed_s, mixed_t, vad, azi_list, ele_list, white_snr_list, coherent_snr_list, rt60_list
     
     
     def __getitem__(self, idx):

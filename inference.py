@@ -212,8 +212,8 @@ class Dataloader_config():
 
     
     def config(self):
-        self.test_loader_synth = Synth_dataload(self.args['dataloader']['test']['loader'])
-        self.test_loader_real = Real_dataload(self.args['dataloader']['test']['loader'])
+        # self.test_loader = Synth_dataload(self.args['dataloader']['test']['loader'])
+        self.test_loader = Real_dataload(self.args['dataloader']['test']['loader'])
        
         return self.args
     
@@ -240,8 +240,7 @@ class Tester():
 
     
     def run(self, ):
-        
-        self.test_SD(0)
+      
         self.test_RD(0)
 
     
@@ -266,62 +265,16 @@ class Tester():
 
 
 
-    def test_SD(self, epoch):
-        self.model.eval()
-
-        for room_type in self.args['hyparam']['result_folder']['room_type']:
-            room_type='evaluation_synth'    
-            self.dataloader.test_loader_synth.dataset.room_type=str(room_type)
-
-            with torch.no_grad():
-
-                for iter_num, (mixed, vad, speech_azi, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.test_loader_synth, desc='Test', total=len(self.dataloader.test_loader_synth))):
-
-                    mixed=mixed.to(self.hyperparameter.device)
-                    vad=vad.to(self.hyperparameter.device)
-                    speech_azi=speech_azi.to(self.hyperparameter.device)
-    
-
-                    out, target, vad_block = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n), (B, num_spk, n)
-
-                    out=out.sigmoid().detach().cpu()  
-                    target=target.cpu()               
-                    speech_azi=speech_azi.cpu()         # (B, 1)
-                    vad_block=vad_block.cpu()           # (B, num_spk, n)
-                    
-                    pkl_idx = self.dataloader.test_loader_synth.dataset.pkl_list[iter_num]
-                    # self.plot_out_target(out[0,2], target[0,2], pkl_idx)
-
-                    num_spk = vad_block.sum(axis=1).max()       # (1, )
-                    num_spk = num_spk.item()
-                    total_argmax_acc, total_softmax_acc, total_half_softmax_acc, \
-                        total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, \
-                            number_of_degrees_to_estimate=metric.mae.calc_mae(out, target, vad_block, num_spk, speech_azi,\
-                                                                        calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
-                                                                            acc_threshold=self.args['hyparam']['acc_threshold'],\
-                                                                                local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
-
-                    self.logger.error_update(room_type, total_argmax_acc, total_softmax_acc,total_half_softmax_acc, total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error,number_of_degrees_to_estimate)
-
-                    
-                    self.learner.memory_delete([mixed, vad, speech_azi, out, target])
-                  
-                self.logger.save_output(room_type)
-
-            break
-
-
-
     def test_RD(self, epoch):
         self.model.eval()
 
         for room_type in self.args['hyparam']['result_folder']['room_type']:
-            room_type='evaluation_real'    
-            self.dataloader.test_loader_real.dataset.room_type=str(room_type)
+            room_type=str(room_type)    
+            self.dataloader.test_loader.dataset.room_type=str(room_type)
 
             with torch.no_grad():
 
-                for iter_num, (mixed, vad, pseudo_target, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.test_loader_real, desc='Test', total=len(self.dataloader.test_loader_real))):
+                for iter_num, (mixed, vad, pseudo_target, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.test_loader, desc='Test', total=len(self.dataloader.test_loader))):
 
                     mixed=mixed.to(self.hyperparameter.device)
                     vad=vad.to(self.hyperparameter.device)
@@ -336,7 +289,7 @@ class Tester():
                     pseudo_target=pseudo_target.cpu()         # (B, 1)
                     vad_block=vad_block.cpu()           # (B, num_spk, n)
                     
-                    pkl_idx = self.dataloader.test_loader_real.dataset.pkl_list[iter_num]
+                    pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
                     # self.plot_out_target(out[0,1], pseudo_target[0,1], pkl_idx)
 
                     total_argmax_acc, total_softmax_acc, total_half_softmax_acc, \
