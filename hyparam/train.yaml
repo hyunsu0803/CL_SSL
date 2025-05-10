@@ -4,7 +4,7 @@ randomseed: 0
 acc_threshold: 10
 local_maximum_distance: 30
 
-last_epoch: 170
+last_epoch: 400
 resume_epoch: 0
 
 GPGPU:
