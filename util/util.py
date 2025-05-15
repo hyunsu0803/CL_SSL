@@ -137,6 +137,36 @@ def draw_result_pic(dir, epoch, train, val, title):
     fig1.savefig(dir, dpi=300)
     plt.close(fig1)
 
+def draw_metric_pic(dir, epoch, loss, mae, acc):
+
+    epo = np.arange(epoch+1)
+
+    os.makedirs(os.path.dirname(dir), exist_ok=True)
+
+    fig, axs = plt.subplots(3, 1, sharex=True)
+
+    # Loss
+    axs[0].plot(epo, loss, color='tab:blue', linewidth=1.5)
+    axs[0].set_title("Loss")
+    axs[0].set_ylabel("Loss")
+    axs[0].grid(axis='y', linestyle='dashed', alpha=0.7)
+
+    # MAE
+    axs[1].plot(epo, mae, color='tab:orange', linewidth=1.5)
+    axs[1].set_title("MAE")
+    axs[1].set_ylabel("MAE")
+    axs[1].grid(axis='y', linestyle='dashed', alpha=0.7)
+
+    # Accuracy
+    axs[2].plot(epo, acc, color='tab:green', linewidth=1.5)
+    axs[2].set_title("Accuracy")
+    axs[2].set_ylabel("Accuracy")
+    axs[2].set_xlabel("Epochs")
+    axs[2].grid(axis='y', linestyle='dashed', alpha=0.7)
+
+    fig.tight_layout()
+    fig.savefig(dir, dpi=300)
+    plt.close(fig)
 
 
 

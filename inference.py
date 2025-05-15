@@ -285,9 +285,9 @@ class Tester():
 
 
                     out=out.sigmoid().detach().cpu()  
-                    target=target.cpu()               
+                    # target=target.cpu()               
                     pseudo_target=pseudo_target.cpu()         # (B, 1)
-                    vad_block=vad_block.cpu()           # (B, num_spk, n)
+                    # vad_block=vad_block.cpu()           # (B, num_spk, n)
                     
                     pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
                     # self.plot_out_target(out[0,1], pseudo_target[0,1], pkl_idx)
@@ -305,7 +305,8 @@ class Tester():
                                              number_of_degrees_to_estimate)
 
                     
-                    self.learner.memory_delete([mixed, vad, pseudo_target, out, target])
+                    self.learner.memory_delete([mixed, vad, pseudo_target, out, target, vad_block, total_argmax_acc, total_softmax_acc, total_half_softmax_acc,
+                                             total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error, number_of_degrees_to_estimate])
                   
                 self.logger.save_output(room_type)
 

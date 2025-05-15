@@ -4,7 +4,7 @@ randomseed: 0
 acc_threshold: 10
 local_maximum_distance: 30
 
-last_epoch: 400
+last_epoch: 170
 resume_epoch: 0
 
 GPGPU:
@@ -13,6 +13,6 @@ GPGPU:
 SCL: True
 finetune: False
 # finetune : False
-trained_scl_model_path: ./results_04241512_ema/model_checkpoint/last_model.tar   # for initial scl+doa training
+trained_scl_model_path: ./results_04241512_ema/model_checkpoint/best_model.tar   # for initial scl+doa training
 # finetune : True
 model_for_finetune: ./results/model_checkpoint/last_model.tar  # only for fine-tuning

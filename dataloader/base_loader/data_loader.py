@@ -62,6 +62,8 @@ class real_data_loader(datamake):
         self.args=args
         
         self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/*/*.pkl')
+        # self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/dev-train-tau/*.pkl') + glob('/root/clssl/STARSS23/mic_dev_pkl/dev-test-tau/*.pkl')
+
 
         
     def __len__(self):
