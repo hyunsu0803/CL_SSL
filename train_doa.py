@@ -31,6 +31,10 @@ class Hyparam_set():
         np.random.seed(self.args['hyparam']['randomseed'])
         random.seed(self.args['hyparam']['randomseed'])
         torch.manual_seed(self.args['hyparam']['randomseed'])
+        torch.random.manual_seed(self.args['hyparam']['randomseed'])
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
 
         if torch.cuda.is_available():
             print("torch cuda is available")
@@ -172,34 +176,40 @@ class Logger_config():
     def __init__(self, args) -> None:
         self.args=args
 
-        self.log_csv=dict()
-
-        self.log_csv['train_epoch_loss']=[]
-        self.log_csv['train_best_loss']=[]
-        self.log_csv['test_epoch_mae']=[]
-        self.log_csv['test_best_mae']=[]
-        self.log_csv['test_epoch_acc']=[]
-        self.log_csv['test_best_acc']=[]
-
         self.log_csv_dir=self.args['logger']['loss_csv']
         self.model_save_dir=self.args['logger']['model_save_dir']
         self.log_png_dir=self.args['logger']['loss_png_dir']
 
 
-        if self.args['logger']['optimize_method']=='min':
-            self.best_test_loss = math.inf
-            self.best_train_loss = math.inf
-            self.best_test_acc = -math.inf
-            self.best_train_acc = -math.inf
-            self.best_test_mae = math.inf
-            self.best_train_mae = math.inf
+        if self.args['hyparam']['finetune']:
+
+            df = pd.read_csv(self.log_csv_dir)
+            df.drop(columns=['Unnamed: 0'], inplace=True)
+            self.log_csv = df.to_dict(orient='list')
+
+            self.best_train_loss = self.log_csv['train_best_loss'][-1]
+            self.best_test_acc = self.log_csv['test_best_acc'][-1]
+            self.best_test_mae = self.log_csv['test_best_mae'][-1]
+
+
         else:
-            self.best_test_loss = -math.inf
-            self.best_train_loss = -math.inf
-            self.best_test_acc = math.inf
-            self.best_train_acc = math.inf
-            self.best_test_mae = -math.inf
-            self.best_train_mae = -math.inf
+            self.log_csv = {
+                'train_epoch_loss': [],
+                'train_best_loss': [],
+                'test_epoch_mae': [],
+                'test_best_mae': [],
+                'test_epoch_acc': [],
+                'test_best_acc': []
+            }
+
+            if self.args['logger']['optimize_method']=='min':
+                self.best_train_loss = math.inf
+                self.best_test_acc = -math.inf
+                self.best_test_mae = math.inf
+            else:
+                self.best_train_loss = -math.inf
+                self.best_test_acc = math.inf
+                self.best_test_mae = -math.inf
 
 
 ###############################################
@@ -391,8 +401,12 @@ class Trainer():
 
     
     def run(self, ):
-      
-        for epoch in range(self.args['hyparam']['resume_epoch'], self.args['hyparam']['last_epoch']):
+
+        first_key = next(iter(self.logger.log_csv), None)
+        resume_epoch = len(self.logger.log_csv[first_key])
+        print('resume epoch : {}'.format(resume_epoch))
+
+        for epoch in range(resume_epoch, self.args['hyparam']['last_epoch']):
 
             self.logger.epoch_init()
             
