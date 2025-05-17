@@ -7,7 +7,7 @@ import importlib
 import math
 import wandb
 from tqdm import tqdm
-from dataloader.wrap_dataload import Train_dataload_for_scl, Synth_dataload, Real_dataload
+from dataloader.wrap_dataload import Train_dataload_for_scl
 import pandas as pd
 import gc
 
@@ -165,44 +165,6 @@ class Learner_config():
         return loss_mean
 
 
-    def test_update(self, outputs, labels, vad_block):
-        # outputs : [(B, 128, n), (B, 128, n), (B, 128, n)]
-        # labels : (B, 1)
-        # vad_block : (B, 1, n)
-
-
-        B, num_spk, n = vad_block.shape
-
-        vad_block_flat = vad_block.reshape(-1)  # (B*n)
-        labels = labels.repeat_interleave(n, dim=0)  # (B*n, 1)
-        labels[vad_block_flat==0] = 360
-        labels[labels == 360] = 1000
-
-
-        losses = []
-
-        for out, sigma in zip(outputs, self.sigma):
-
-            out = out.permute(0, 2, 1)  # (B, n, 128)
-            out = out.reshape(-1, out.shape[-1])  # (B*n, 128)
-
-
-            loss_mean = self.loss_func(out, labels, sigma)
-
-
-            if torch.isnan(loss_mean):
-                print('nan occured')
-                self.optimizer.zero_grad()
-                return loss_mean
-
-            losses.append(loss_mean)
-
-
-        loss_mean = sum(losses) / len(losses)
-
-        return loss_mean
-
-
     def config(self):
         self.device=self.args['hyparam']['GPGPU']['device']
         self.model_select()     # set self.model
@@ -219,18 +181,14 @@ class Logger_config():
         self.csv=dict()
         self.csv['train_epoch_loss']=[]
         self.csv['train_best_loss']=[]
-        # self.csv['test_epoch_loss']=[]
-        # self.csv['test_best_loss']=[]
 
         self.csv_dir=self.args['logger']['loss_csv']
         self.model_save_dir=self.args['logger']['model_save_dir']
         self.png_dir=self.args['logger']['loss_png_dir']
 
         if self.args['logger']['optimize_method']=='min':
-            self.best_test_loss=math.inf
             self.best_train_loss=math.inf
         else:
-            self.best_test_loss=-math.inf
             self.best_train_loss=-math.inf
 
     def train_iter_log(self, loss):
@@ -258,32 +216,6 @@ class Logger_config():
             None
 
         self.csv['train_best_loss'].append(self.best_train_loss)
-
-
-    # def test_iter_log(self, loss):
-    #     try:
-    #         wandb.log({'test_iter_loss':loss})
-    #     except:
-    #         None
-    #     self.epoch_test_loss.append(loss.cpu().detach().item())
-
-
-    # def test_epoch_log(self, optimizer_scheduler):
-    #     loss_mean=np.array(self.epoch_test_loss).mean()
-    #     self.csv['test_epoch_loss'].append(loss_mean)
-
-    #     self.model_save=False
-    #     if self.best_test_loss > loss_mean:
-    #         self.model_save=True
-    #         self.best_test_loss = loss_mean 
-    #     try:
-    #         wandb.log({'test_epoch_loss':loss_mean})
-    #         wandb.log({'test_best_loss':self.best_test_loss})
-    #     except:
-    #         None
-    #     self.csv['test_best_loss'].append(self.best_test_loss)
-
-    #     optimizer_scheduler.step(loss_mean)
         
 
     def epoch_init(self,):
@@ -311,7 +243,7 @@ class Logger_config():
         os.makedirs(os.path.dirname(self.model_save_dir + "last_model.tar"), exist_ok=True)
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar")
 
-        if epoch % 50 == 0 and epoch > 0:
+        if epoch % 50 == 49:
             torch.save(checkpoint, self.model_save_dir + "epoch_{}.tar".format(epoch))
         
         util.util.draw_result_pic(self.png_dir, epoch, self.csv['train_epoch_loss'],  self.csv['train_epoch_loss'], 'Loss')
@@ -335,12 +267,8 @@ class Dataloader_config():
 
         self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 64
         self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 4
-        self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 64
-        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 4
-        self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/scl/'
         
         self.train_loader=Train_dataload_for_scl(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
-        self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])
         
         return self.args   
         
@@ -383,8 +311,7 @@ class Trainer():
 
             self.logger.epoch_init()
             
-            self.train(epoch)
-            # self.validation(epoch)           
+            self.train(epoch)       
             
             self.logger.epoch_finish(epoch, self.model, self.optimizer)
 
@@ -402,23 +329,25 @@ class Trainer():
         torch.cuda.empty_cache()
 
 
-        if epoch == self.stage0:
+        # if epoch == self.stage0:
 
-            self.n_room = 1
-            self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
+        #     self.n_room = 1
+        #     self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
 
-        if epoch >= self.stage1:
+        # if epoch >= self.stage1:
 
-            if epoch < self.stage2:
-                self.n_room = 1
-            elif epoch < self.stage3:
-                self.n_room = 0
-            elif epoch < self.stage4:
-                self.n_room = 8
+        #     if epoch < self.stage2:
+        #         self.n_room = 1
+        #     elif epoch < self.stage3:
+        #         self.n_room = 0
+        #     elif epoch < self.stage4:
+        #         self.n_room = 8
 
-            self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
+        #     self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
 
         
+        self.n_room = 8
+        self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)        
 
         for iter_num, (mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
             gc.collect()
@@ -440,43 +369,13 @@ class Trainer():
             self.learner.memory_delete([mixed_s, mixed_t, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60, outputs, loss, embedding, vad_block])
 
             
-            if epoch >= self.stage2:
-                self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
-        
-        
-        self.logger.train_epoch_log()
-        
+            # if epoch >= self.stage2:
+            #     self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
 
- 
-    def validation(self, epoch):
-        self.model.eval()
+            self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         
-        torch.cuda.empty_cache()
         
-
-        with torch.no_grad():
-            
-            # mixed : (16, 4, 64000)
-            # speech_azi : (16, 1)
-            # num_spk : (16)
-            for iter_num, (mixed, vad, speech_azi, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
-                                
-
-                mixed=mixed.to(self.hyperparameter.device)
-                vad=vad.to(self.hyperparameter.device)
-                speech_azi=speech_azi.to(self.hyperparameter.device)
-
-                outputs, embedding, speech_azi, vad_block = self.model(mixed, vad, speech_azi)
-                
-                loss=self.learner.test_update(outputs, speech_azi, vad_block)
-                    
-                    
-                self.logger.test_iter_log(loss)
-                self.learner.memory_delete([mixed, vad, speech_azi, white_snr, coherent_snr, rt60, outputs, loss, embedding, vad_block])
-                gc.collect()
-             
-            self.logger.test_epoch_log(self.optimizer_scheduler)
-            
+        self.logger.train_epoch_log()            
             
             
 
