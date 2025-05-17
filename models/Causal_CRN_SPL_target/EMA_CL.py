@@ -76,7 +76,7 @@ class CRN(nn.Module):
         self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))       # (2*2*(C-1), 32, 3)
         self.pooling.append(nn.MaxPool2d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
         
-        args[0]=self.config['CNN']['filter']                             # (64, 32, 3)   in_channel ë³€ê²½
+        args[0]=self.config['CNN']['filter']                             # (64, 32, 3)   in_channel ë³?ê²?
         for count in range(self.cnn_num-1):
             self.cnn.append(Causal_Conv2D_Block(*args, **kwargs))   
             self.pooling.append(nn.MaxPool2d(kernel_size=self.max_pool_kernel, stride=self.max_pool_stride))  # (2, 2)
@@ -199,13 +199,15 @@ class main_model_for_scl(nn.Module):
         ibRTF_t, vad_block = self.data_proc.ib_RTF(block_stft_t, block_vad_frame)      # (B, 2(C-1), F, n), (B, n)
 
         outputs_s, embedding_s = self.encoder_s(ibRTF_s)    # (B, 128, n), (B, 256, n)
-        with torch.no_grad():
-            self._momentum_update_key_encoder()
-            outputs_t, embedding_t = self.encoder_t(ibRTF_t)    # (B, 128, n), (B, 256, n)
+        # outputs_t, embedding_t = self.encoder_t(ibRTF_t)    # (B, 128, n), (B, 256, n)
+        
+        # with torch.no_grad():
+        #     self._momentum_update_key_encoder()
+        #     outputs_t, embedding_t = self.encoder_t(ibRTF_t)    # (B, 128, n), (B, 256, n)
 
-
-        outputs = [outputs_s, outputs_t]
-        embedding = [embedding_s, embedding_t]
+        
+        outputs = [outputs_s, outputs_s]
+        embedding = [embedding_s, embedding_s]
         
         return outputs, embedding, azi_list, vad_block
     
