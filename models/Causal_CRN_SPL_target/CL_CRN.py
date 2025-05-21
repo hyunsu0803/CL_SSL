@@ -172,7 +172,7 @@ class main_model_for_scl(nn.Module):
         
     def forward(self, mixed, vad, azi_list):
 
-        mixed, vad, azi_list = self.data_proc.permute_data(mixed, vad, azi_list)
+        mixed, _, vad, azi_list = self.data_proc.permute_data(mixed, None, vad, azi_list)
         block_stft, block_vad_frame = self.data_proc.make_block(mixed, vad)
         ibRTF, vad_block = self.data_proc.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, n)
 

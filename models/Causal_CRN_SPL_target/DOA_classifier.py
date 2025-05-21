@@ -192,8 +192,8 @@ class main_model_for_doa(nn.Module):
             self.scl_model.load_state_dict(trained['model_state_dict'], )   
 
         self.scl_model.train()
-        for param in self.scl_model.encoder_t.parameters():
-            param.requires_grad = True
+        # for param in self.scl_model.encoder_t.parameters():
+        #     param.requires_grad = True
         
 
     def make_target(self, vad_block, azi):
@@ -234,8 +234,8 @@ class main_model_for_doa(nn.Module):
         ibRTF, vad_block = self.data_proc.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, num_spk, n)
 
         if self.use_scl:
-            z, embedding, azi_list, vad_block = self.scl_model(mixed, mixed.clone(), vad, azi_list)
-            embedding_s, embedding_t = embedding
+            z, embedding, azi_list, vad_block = self.scl_model(mixed, vad, azi_list)
+            embedding_s, embedding_t = embedding, embedding
             embedding_s = embedding_s.unsqueeze(1)   # (B, 1, 256, n)
             embedding_t = embedding_t.unsqueeze(1)
         else:

@@ -170,7 +170,8 @@ def calc_mae_RD(output, target, resolution=1, local_maximum_distance=30, calc_la
     return total_argmax_acc, total_softmax_acc,total_half_softmax_acc, total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error, number_of_degrees_to_estimate
 
 
-def calc_mae(output_B, target, vad_B, num_spk, azimuth_B, resolution=1, local_maximum_distance=10, calc_layer=[2], acc_threshold=10, ref_vec=0):
+
+def calc_mae(output, target, vad, num_spk, azimuth, resolution=1, local_maximum_distance=10, calc_layer=[2], acc_threshold=10, ref_vec=0):
 
     number_of_degrees_to_estimate=0
 
@@ -181,81 +182,79 @@ def calc_mae(output_B, target, vad_B, num_spk, azimuth_B, resolution=1, local_ma
     total_argmax_doa_error=0
 
     total_half_softmax_acc=0
+
     total_half_softmax_doa_error=0
 
+
     
-    for batch_num in range(output_B.shape[0]):
+    
+    output=output.numpy()
+    azimuth=azimuth.repeat_interleave(len(calc_layer), 0)
+    
 
-        output=output_B[batch_num] 
-        vad=vad_B[batch_num] 
-        azimuth=azimuth_B[batch_num].unsqueeze(0) # (1, num_spk)
+    for frame_num in range(output.shape[-1]):
 
-        azimuth=azimuth.repeat_interleave(len(calc_layer), 0)
+        vad_frame=vad[..., frame_num] # B, num_spk
 
+        if vad_frame.any()==0: # no speech in the frame
+            continue
 
-        for frame_num in range(output_B.shape[-1]):
+        active_spk=np.where(vad_frame[0]==1)[0]    
+        active_spk_num=active_spk.shape[0]   
+        number_of_degrees_to_estimate+=1
 
-            vad_frame=vad[..., frame_num] # B, num_spk
-
-            if vad_frame.any()==0: # no speech in the frame
-                continue
-
-            active_spk=np.where(vad_frame[0]==1)[0]    
-            active_spk_num=active_spk.shape[0]   
-            number_of_degrees_to_estimate+=1
-
-            frame_azimuth=azimuth[:, active_spk]
-            
-            
-            
-            out_frame=output[..., frame_num] # B, 360//resolution
-
-            argmax_peak_list=[]
-            softmax_peak_list=[]
-            half_softmax_peak_list=[]
-
-            for layer in calc_layer:
-                
-
-                local_argmax_point, local_softmax_point, local_half_softmax_point=find_max_point(local_maximum_distance, active_spk_num, out_frame[layer])
-                
-                
-                argmax_peak_list.append(local_argmax_point)
-                softmax_peak_list.append(local_softmax_point)
-                half_softmax_peak_list.append(local_half_softmax_point)
-                
-            argmax_estimate_frame=np.stack(argmax_peak_list) 
-            softmax_estimate_frame=np.stack(softmax_peak_list)
-            half_softmax_estimate_frame=np.stack(half_softmax_peak_list)
-            
-            estimate_frame=np.concatenate((argmax_estimate_frame, softmax_estimate_frame, half_softmax_estimate_frame))
+        frame_azimuth=azimuth[:, active_spk]
         
-            estimate_frame=torch.from_numpy(estimate_frame) +ref_vec     
+        
+        
+        out_frame=output[..., frame_num] # B, 360//resolution
+
+        argmax_peak_list=[]
+        softmax_peak_list=[]
+        half_softmax_peak_list=[]
+
+        for layer in calc_layer:
             
 
-            estimate_frame=estimate_frame%360
-    
-            frame_azimuth=frame_azimuth.repeat_interleave(3,dim=0)
-
-
+            local_argmax_point, local_softmax_point, local_half_softmax_point=find_max_point(local_maximum_distance, active_spk_num, out_frame[0, layer])
             
-            doa_error=get_pw_losses(get_doa_error, estimate_frame, frame_azimuth)   
-    
-            acc=doa_error<=acc_threshold
+            
+            argmax_peak_list.append(local_argmax_point)
+            softmax_peak_list.append(local_softmax_point)
+            half_softmax_peak_list.append(local_half_softmax_point)
+            
+        argmax_estimate_frame=np.stack(argmax_peak_list) 
+        softmax_estimate_frame=np.stack(softmax_peak_list)
+        half_softmax_estimate_frame=np.stack(half_softmax_peak_list)
+        
+        estimate_frame=np.concatenate((argmax_estimate_frame, softmax_estimate_frame, half_softmax_estimate_frame))
+       
+        estimate_frame=torch.from_numpy(estimate_frame) +ref_vec     
+        
 
-            acc=acc.astype(int).mean(axis=1)
-            doa_error=doa_error.sum(axis=-1)
+        estimate_frame=estimate_frame%360
+   
+        frame_azimuth=frame_azimuth.repeat_interleave(3,dim=0)
+
 
         
-            
-            total_argmax_acc=total_argmax_acc+acc[:len(calc_layer)]
-            total_softmax_acc=total_softmax_acc+acc[len(calc_layer):2*len(calc_layer)]
-            total_half_softmax_acc=total_half_softmax_acc+acc[-len(calc_layer):]
-            
+        doa_error=get_pw_losses(get_doa_error, estimate_frame, frame_azimuth)   
+   
+        acc=doa_error<=acc_threshold
 
-            total_argmax_doa_error=total_argmax_doa_error+doa_error[:len(calc_layer)]
-            total_softmax_doa_error=total_softmax_doa_error+doa_error[len(calc_layer):2*len(calc_layer)]
-            total_half_softmax_doa_error=total_half_softmax_doa_error+doa_error[-len(calc_layer):]
+        acc=acc.astype(int).mean(axis=1)
+        doa_error=doa_error.sum(axis=-1)
+
+       
+        
+        total_argmax_acc=total_argmax_acc+acc[:len(calc_layer)]
+        total_softmax_acc=total_softmax_acc+acc[len(calc_layer):2*len(calc_layer)]
+        total_half_softmax_acc=total_half_softmax_acc+acc[-len(calc_layer):]
+        
+
+        total_argmax_doa_error=total_argmax_doa_error+doa_error[:len(calc_layer)]
+        total_softmax_doa_error=total_softmax_doa_error+doa_error[len(calc_layer):2*len(calc_layer)]
+        total_half_softmax_doa_error=total_half_softmax_doa_error+doa_error[-len(calc_layer):]
 
    
     return total_argmax_acc, total_softmax_acc,total_half_softmax_acc, total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error, number_of_degrees_to_estimate
