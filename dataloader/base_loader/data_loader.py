@@ -39,7 +39,7 @@ class synth_data_loader(datamake):
         data_dict = pickle.load(pkl_file)   # torch tensors
         pkl_file.close()
         
-        mixed = data_dict['mixed'].numpy()
+        mixed = data_dict['mixed'][0].numpy()
         vad = data_dict['vad'].numpy()
         azi_list = data_dict['azi'].tolist()
         white_snr = data_dict['white_snr']

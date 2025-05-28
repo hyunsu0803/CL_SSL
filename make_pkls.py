@@ -75,14 +75,14 @@ class Trainer():
         for i in range(10):
             self.validation_for_scl(0)
         
-        self.validation_for_doa(0)
+        # self.validation_for_doa(0)
 
         
 
     def validation_for_scl(self, epoch):
 
         with torch.no_grad():
-            n_room = 8
+            n_room = 0
             self.dataloader.scl_maker.dataset.random_room_speech_select(n_room)
             for iter_num, (a, b, c, d) in enumerate(tqdm(self.dataloader.scl_maker , desc='Test', total=len(self.dataloader.scl_maker), )):
                 self.dataloader.scl_maker.dataset.random_room_speech_select(n_room)

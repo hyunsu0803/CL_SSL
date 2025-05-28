@@ -95,7 +95,7 @@ class Learner_config():
         
     def init_optimzer_scheduler(self, ):
 
-        self.args['learner']['optimizer_scheduler']['config']['min_lr'] = 1.0e-3
+        self.args['learner']['optimizer_scheduler']['config']['min_lr'] = 1.0e-4
 
         a=importlib.import_module('torch.optim.lr_scheduler')
         assert hasattr(a, self.args['learner']['optimizer_scheduler']['type']), "optimizer scheduler {} is not in {}".format(self.args['learner']['optimizer']['type'], 'torch')
@@ -196,6 +196,7 @@ class Logger_config():
             self.log_csv = {
                 'train_epoch_loss': [],
                 'train_best_loss': [],
+                'test_epoch_loss': [],
                 'test_epoch_mae': [],
                 'test_best_mae': [],
                 'test_epoch_acc': [],
@@ -229,16 +230,8 @@ class Logger_config():
 
         self.log_csv['train_epoch_loss'].append(loss_mean)
 
-        self.model_save_loss=False
         if self.best_train_loss > loss_mean:
             self.best_train_loss = loss_mean 
-            self.model_save_loss = True
-
-        try:
-            wandb.log({'train_epoch_loss':loss_mean})
-            wandb.log({'train_best_loss':self.best_train_loss})
-        except:
-            None
 
         self.log_csv['train_best_loss'].append(self.best_train_loss)
 
@@ -247,11 +240,19 @@ class Logger_config():
 # test log
 ###############################################
 
-    def test_iter_metric_log(self, out, pseudo_target):
+    def test_iter_loss_log(self, loss):
+        try:
+            wandb.log({'test_iter_loss':loss})
+        except:
+            None
+        self.epoch_test_loss.append(loss.cpu().detach().item())
+
+
+    def test_iter_metric_log(self, out, target, vad_block, num_spk, speech_azi):
         
         total_argmax_acc, total_softmax_acc, total_half_softmax_acc, \
                         total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, \
-                            number_of_degrees_to_estimate=metric.mae.calc_mae_RD(out, pseudo_target.long(),\
+                            number_of_degrees_to_estimate=metric.mae.calc_mae(out, target, vad_block, num_spk, speech_azi,\
                                                                         calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
                                                                             acc_threshold=self.args['hyparam']['acc_threshold'],\
                                                                                 local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
@@ -260,6 +261,13 @@ class Logger_config():
         now_dict['softmax_acc']+=total_softmax_acc
         now_dict['softmax_doa_error']+=total_softmax_doa_error
         now_dict['number_of_degrees']+=number_of_degrees_to_estimate
+
+
+    def test_epoch_loss_log(self, optimizer_scheduler):
+        loss_mean=np.array(self.epoch_test_loss).mean()
+        self.log_csv['test_epoch_loss'].append(loss_mean)
+
+        optimizer_scheduler.step(loss_mean)
 
 
     def test_epoch_metric_log(self,):
@@ -305,6 +313,7 @@ class Logger_config():
 
     def epoch_init(self,):
         self.epoch_train_loss=[]
+        self.epoch_test_loss=[]
 
         self.save_test_config_dict={}
         self.save_test_config_dict['softmax_acc']=0
@@ -325,10 +334,10 @@ class Logger_config():
             }
 
 
-        if self.model_save_loss:
-            os.makedirs(os.path.dirname(self.model_save_dir + "best_loss_model.tar"), exist_ok=True)
-            torch.save(checkpoint, self.model_save_dir + "best_loss_model.tar")
-            print("new best model - loss\n")
+        # if self.model_save_loss:
+        #     os.makedirs(os.path.dirname(self.model_save_dir + "best_loss_model.tar"), exist_ok=True)
+        #     torch.save(checkpoint, self.model_save_dir + "best_loss_model.tar")
+        #     print("new best model - loss\n")
 
         if self.model_save_mae:
             os.makedirs(os.path.dirname(self.model_save_dir + "best_mae_model.tar"), exist_ok=True)
@@ -341,7 +350,8 @@ class Logger_config():
             print("new best model - acc\n")
 
 
-        torch.save(checkpoint,  self.model_save_dir + "last_model.tar".format(epoch))
+        torch.save(checkpoint,  self.model_save_dir + "last_model.tar")
+        torch.save(checkpoint,  self.model_save_dir + "epoch_{}.tar".format(epoch))
 
         util.util.draw_metric_pic(self.log_png_dir, epoch, self.log_csv['train_epoch_loss'],  self.log_csv['test_epoch_mae'], self.log_csv['test_epoch_acc'])
 
@@ -369,7 +379,8 @@ class Dataloader_config():
         self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/doa/'
         
         self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
-        self.val_loader=Real_dataload(self.args['dataloader']['val']['loader'])
+        # self.val_loader=Real_dataload(self.args['dataloader']['val']['loader'])
+        self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])
         
         return self.args   
         
@@ -458,32 +469,35 @@ class Trainer():
         
         with torch.no_grad():
             
-            for iter_num, (mixed, vad, pseudo_target, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
+            for iter_num, (mixed, vad, speech_azi, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.val_loader, desc='Test', total=len(self.dataloader.val_loader), )):
                 
                 
                 mixed=mixed.to(self.hyperparameter.device)
                 vad=vad.to(self.hyperparameter.device)
-                pseudo_target=pseudo_target.to(self.hyperparameter.device)
-                temp_azi=torch.zeros(mixed.shape[0])
+                speech_azi=speech_azi.to(self.hyperparameter.device)
 
-                
-                out, target, vad_block = self.model(mixed, vad, temp_azi)
+                out, target, vad_block = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n), (B, num_spk, n)
 
                 out=out.sigmoid().detach().cpu()  
                 target=target.cpu()               
-                pseudo_target=pseudo_target.cpu()         # (B, 1)
+                speech_azi=speech_azi.cpu()         # (B, 1)
+                vad_block=vad_block.cpu()           # (B, num_spk, n)
+                num_spk = vad_block.sum(axis=1).max()       # (1, )
+                num_spk = num_spk.item()
 
                 
-                loss=self.learner.test_update(out, pseudo_target)
+                loss=self.learner.test_update(out, target)
                     
-                    
-                self.logger.test_iter_metric_log(out, pseudo_target)
+                self.logger.test_iter_loss_log(loss)
+                self.logger.test_iter_metric_log(out, target, vad_block, num_spk, speech_azi)
 
-                self.learner.memory_delete([mixed, vad, pseudo_target, out, loss, target, white_snr, coherent_snr, rt60])
+                self.learner.memory_delete([mixed, vad, target, out, loss, target, white_snr, coherent_snr, rt60])
                 gc.collect()
-             
             
+            
+            self.logger.test_epoch_loss_log(self.optimizer_scheduler)
             self.logger.test_epoch_metric_log()
+
             
 
 

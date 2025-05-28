@@ -213,22 +213,37 @@ class Learner_config():
 class Logger_config():
     def __init__(self, args) -> None:
         self.args=args
-        self.csv=dict()
-        self.csv['train_epoch_loss']=[]
-        self.csv['train_best_loss']=[]
-        self.csv['test_epoch_loss']=[]
-        self.csv['test_best_loss']=[]
 
-        self.csv_dir=self.args['logger']['loss_csv']
+        self.log_csv_dir=self.args['logger']['loss_csv']
         self.model_save_dir=self.args['logger']['model_save_dir']
         self.png_dir=self.args['logger']['loss_png_dir']
+        
+        
+        if self.args['hyparam']['finetune']:
 
-        if self.args['logger']['optimize_method']=='min':
-            self.best_test_loss=math.inf
-            self.best_train_loss=math.inf
+            df = pd.read_csv(self.log_csv_dir)
+            df.drop(columns=['Unnamed: 0'], inplace=True)
+            self.log_csv = df.to_dict(orient='list')
+
+            self.best_train_loss = self.log_csv['train_best_loss'][-1]
+            self.best_test_loss = self.log_csv['test_best_loss'][-1]
+            
         else:
-            self.best_test_loss=-math.inf
-            self.best_train_loss=-math.inf
+            self.log_csv = {
+                'train_epoch_loss': [],
+                'train_best_loss': [],
+                'test_epoch_loss': [],
+                'test_best_loss': []
+            }
+
+            if self.args['logger']['optimize_method']=='min':
+                self.best_train_loss = math.inf
+                self.best_test_loss = math.inf
+            else:
+                self.best_train_loss = -math.inf
+                self.best_test_loss = -math.inf
+                
+                
 
     def train_iter_log(self, loss):
         try:
@@ -241,7 +256,7 @@ class Logger_config():
     def train_epoch_log(self):
         loss_mean=np.array(self.epoch_train_loss).mean()
 
-        self.csv['train_epoch_loss'].append(loss_mean)
+        self.log_csv['train_epoch_loss'].append(loss_mean)
 
         if self.best_train_loss > loss_mean:
             self.best_train_loss = loss_mean 
@@ -252,7 +267,7 @@ class Logger_config():
         except:
             None
 
-        self.csv['train_best_loss'].append(self.best_train_loss)
+        self.log_csv['train_best_loss'].append(self.best_train_loss)
 
 
     def test_iter_log(self, loss):
@@ -265,7 +280,7 @@ class Logger_config():
 
     def test_epoch_log(self, optimizer_scheduler):
         loss_mean=np.array(self.epoch_test_loss).mean()
-        self.csv['test_epoch_loss'].append(loss_mean)
+        self.log_csv['test_epoch_loss'].append(loss_mean)
 
         self.model_save=False
         if self.best_test_loss > loss_mean:
@@ -276,7 +291,7 @@ class Logger_config():
             wandb.log({'test_best_loss':self.best_test_loss})
         except:
             None
-        self.csv['test_best_loss'].append(self.best_test_loss)
+        self.log_csv['test_best_loss'].append(self.best_test_loss)
 
         optimizer_scheduler.step(loss_mean)
         
@@ -288,8 +303,8 @@ class Logger_config():
 
     def epoch_finish(self, epoch, model, optimizer):
     
-        os.makedirs(os.path.dirname(self.csv_dir), exist_ok=True)
-        pd.DataFrame(self.csv).to_csv(self.csv_dir)
+        os.makedirs(os.path.dirname(self.log_csv_dir), exist_ok=True)
+        pd.DataFrame(self.log_csv).to_csv(self.log_csv_dir)
 
         checkpoint = {
                 'epoch': epoch,
@@ -303,9 +318,10 @@ class Logger_config():
             torch.save(checkpoint, self.model_save_dir + "best_model.tar")
             print("new best model\n")
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar")
+        torch.save(checkpoint,  self.model_save_dir + "epoch_{}.tar".format(epoch))
 
         
-        util.util.draw_result_pic(self.png_dir, epoch, self.csv['train_epoch_loss'],  self.csv['test_epoch_loss'], 'Loss')
+        util.util.draw_result_pic(self.png_dir, epoch, self.log_csv['train_epoch_loss'],  self.log_csv['test_epoch_loss'], 'Loss')
 
 
     def wandb_config(self):
@@ -360,11 +376,21 @@ class Trainer():
 
         self.logger=Logger_config(self.args)
         self.args=self.logger.config()
+        
+        self.stage0 = 0
+        self.stage1 = 50
+        self.stage2 = 100
+        self.stage3 = 200
+        self.stage4 = 400
 
     
     def run(self, ):
-      
-        for epoch in range(self.args['hyparam']['resume_epoch'], self.args['hyparam']['last_epoch']):
+        
+        first_key = next(iter(self.logger.log_csv), None)
+        resume_epoch = len(self.logger.log_csv[first_key])
+        print('resume epoch : {}'.format(resume_epoch))
+
+        for epoch in range(resume_epoch, self.args['hyparam']['last_epoch']):
 
             self.logger.epoch_init()
             
@@ -386,13 +412,20 @@ class Trainer():
 
         torch.cuda.empty_cache()
         
-
-            
-        self.n_room = 8
+        if epoch < self.stage2:
+            self.n_room = 0
+        else:
+            self.n_room = 8
+        
+        if epoch == self.stage2:
+            print('stage1 : contrast room selection')
         self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
+            
+        # self.n_room = 0
+        # self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         for iter_num, (mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
 
-            mixed = mixed.to(self.hyperparameter.device)
+            mixed = mixed[0].to(self.hyperparameter.device)
             vad = vad.to(self.hyperparameter.device)
             speech_azi = speech_azi.to(self.hyperparameter.device)
             
