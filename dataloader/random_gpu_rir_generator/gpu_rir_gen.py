@@ -241,7 +241,11 @@ class acoustic_simulator_on_the_fly(simulator_common):
     def get_source_pos_for_doa(self, theta, azi_pos, linear_azi_pos, mic_center, room_sz):
 
         while True:
-            r=random.uniform(*self.rir_character_dict['room']['distance']) # distance from mic
+            dist_range=self.rir_character_dict['room']['distance']
+            min_room_size=min(room_sz[:2])
+            if dist_range[1]>min_room_size/2:
+                dist_range=[dist_range[0], min_room_size/2]
+            r=random.uniform(*dist_range) # distance from mic
             np_azi=np.array(azi_pos)
             np_linear_azi=np.array(linear_azi_pos)
 

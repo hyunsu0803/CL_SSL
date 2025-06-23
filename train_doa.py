@@ -257,6 +257,9 @@ class Logger_config():
                                                                             acc_threshold=self.args['hyparam']['acc_threshold'],\
                                                                                 local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
         now_dict=self.save_test_config_dict
+
+        now_dict['argmax_acc']+=total_argmax_acc
+        now_dict['argmax_doa_error']+=total_argmax_doa_error
         
         now_dict['softmax_acc']+=total_softmax_acc
         now_dict['softmax_doa_error']+=total_softmax_doa_error
@@ -274,30 +277,39 @@ class Logger_config():
 
         now_dict=self.save_test_config_dict
 
-        softmax_acc = now_dict['softmax_acc'] / now_dict['number_of_degrees']
-        softmax_doa_error = now_dict['softmax_doa_error'] / now_dict['number_of_degrees']
+        argmax_acc = now_dict['argmax_acc'] / now_dict['number_of_degrees']
+        argmax_doa_error = now_dict['argmax_doa_error'] / now_dict['number_of_degrees']
 
-        softmax_acc = softmax_acc[1]
-        softmax_doa_error = softmax_doa_error[1]
+        argmax_acc = argmax_acc[2]
+        argmax_doa_error = argmax_doa_error[2]
 
-        self.log_csv['test_epoch_acc'].append(softmax_acc)
-        self.log_csv['test_epoch_mae'].append(softmax_doa_error)
+        self.log_csv['test_epoch_acc'].append(argmax_acc)
+        self.log_csv['test_epoch_mae'].append(argmax_doa_error)
+
+        # softmax_acc = now_dict['softmax_acc'] / now_dict['number_of_degrees']
+        # softmax_doa_error = now_dict['softmax_doa_error'] / now_dict['number_of_degrees']
+
+        # softmax_acc = softmax_acc[1]
+        # softmax_doa_error = softmax_doa_error[1]
+
+        # self.log_csv['test_epoch_acc'].append(softmax_acc)
+        # self.log_csv['test_epoch_mae'].append(softmax_doa_error)
 
 
         self.model_save_acc = False
-        if self.best_test_acc < softmax_acc:
-            self.best_test_acc = softmax_acc
+        if self.best_test_acc < argmax_acc:
+            self.best_test_acc = argmax_acc
             self.model_save_acc = True
 
         self.model_save_mae = False
-        if self.best_test_mae > softmax_doa_error:
-            self.best_test_mae = softmax_doa_error
+        if self.best_test_mae > argmax_doa_error:
+            self.best_test_mae = argmax_doa_error
             self.model_save_mae = True
 
         try:
-            wandb.log({'test_epoch_acc':softmax_acc})
+            wandb.log({'test_epoch_acc':argmax_acc})
             wandb.log({'test_best_acc':self.best_test_acc})
-            wandb.log({'test_epoch_mae':softmax_doa_error})
+            wandb.log({'test_epoch_mae':argmax_doa_error})
             wandb.log({'test_best_mae':self.best_test_mae})
         except:
             None
@@ -316,6 +328,8 @@ class Logger_config():
         self.epoch_test_loss=[]
 
         self.save_test_config_dict={}
+        self.save_test_config_dict['argmax_acc']=0
+        self.save_test_config_dict['argmax_doa_error']=0
         self.save_test_config_dict['softmax_acc']=0
         self.save_test_config_dict['softmax_doa_error']=0
         self.save_test_config_dict['number_of_degrees']=0

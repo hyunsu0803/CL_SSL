@@ -57,7 +57,8 @@ class ConvSTFT(nn.Module):
         
         # 2F x 1 x N
         kernel, _ = init_kernels(win_len, win_inc, self.fft_len, win_type)
-        vad_kernel=torch.ones((1,1, self.fft_len), dtype=torch.float32)/self.fft_len
+        # vad_kernel=torch.ones((1,1, self.fft_len), dtype=torch.float32)/self.fft_len
+        vad_kernel=torch.ones((1,1, win_len), dtype=torch.float32)/win_len
         self.register_buffer('vad_kernel', vad_kernel)
                 
         self.register_buffer('weight', kernel)

@@ -242,7 +242,7 @@ class main_model_for_doa(nn.Module):
             embedding = ibRTF   # (B, 2(C-1), F, n)
 
 
-        out=self.crn(embedding_s) # (B, 3, 360, n)
+        out=self.crn(embedding) # (B, 3, 360, n)
 
         target=self.make_target(vad_block, azi_list)   # (B, 3, 360, n)
 
