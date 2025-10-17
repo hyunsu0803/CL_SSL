@@ -257,4 +257,4 @@ def calc_mae(output, target, vad, num_spk, azimuth, resolution=1, local_maximum_
         total_half_softmax_doa_error=total_half_softmax_doa_error+doa_error[-len(calc_layer):]
 
    
-    return (total_argmax_acc, total_softmax_acc,total_half_softmax_acc, total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error, number_of_degrees_to_estimate)
+    return total_argmax_acc, total_softmax_acc,total_half_softmax_acc, total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error, number_of_degrees_to_estimate

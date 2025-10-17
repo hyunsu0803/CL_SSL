@@ -113,16 +113,16 @@ class crn(nn.Module):
             x=pooling_layer(x)
 
 
-        b, c, f, n=x.shape              # (B, 64, 8, n)
-        x=x.view(b, -1, n).permute(0,2,1)   # (B, n, 64*8=512)
+        b, c, f, n=x.shape              # (B, 64, 16, n)
+        x=x.view(b, -1, n).permute(0,2,1)   # (B, n, 64*16=1024)
         
         h0 = self.h0.repeat_interleave(x.shape[0], dim=1)  
         self.GRU_layer.flatten_parameters()
         
         x, h=self.GRU_layer(x, h0)      # (B, n, 256(hidden size))
 
-        emb = x.permute(0,2,1)    # (B, 256, n)
-        x = x.permute(0,2,1)
+        x = x.permute(0,2,1)    # (B, 256, n)
+        
 
 
         ##############################
@@ -134,10 +134,9 @@ class crn(nn.Module):
             x=cnn_layer(x)
             res_output=final_layer(x)
             outputs.append(res_output)
-            break
-        # output=torch.stack(outputs).permute(1,0,2,3)    # (B, 3, 360, 1)
+        output=torch.stack(outputs).permute(1,0,2,3)    # (B, 3, 360, 1)
         
-        return outputs[0], emb
+        return output.squeeze(dim=-1)
 
 
 
@@ -157,7 +156,7 @@ class main_model_for_doa(nn.Module):
             self.config['CRN']['GRU']['input_size'] = 2048
         else:
             self.config['CRN']['input_cnn_channel'] = 6
-            self.config['CRN']['GRU']['input_size'] = 1408 # 512
+            self.config['CRN']['GRU']['input_size'] = 512
         
         self.eps=np.finfo(np.float32).eps
         self.ref_ch=self.config['ref_ch']
@@ -227,59 +226,27 @@ class main_model_for_doa(nn.Module):
         target=torch.max(target, dim=2).values   # (B, 3, 360, block_num)
        
         return target   
-    
-
-    def irtf_feature(self, mixed, vad):  
-
-        ref_ch = 0
-        eps = np.finfo(np.float32).eps
-
-        # mixed = mixed.unsqueeze(0)  # (1, C, T)
-        # vad = vad.unsqueeze(0)      # (1, T)
-
-        r, i, vad_frame = self.stft_model(mixed, vad, cplx=True)
-        # B x C x F x T = (B, 4, 513, 345)
-        comp = torch.complex(r, i)
-
-        
-        comp_ref = comp[..., [ref_ch], :, :]
-        comp=torch.cat((comp[..., ref_ch-1:ref_ch, :, :], comp[..., ref_ch+1:, :, :]), dim=-3)
-
-        comp_norm = comp / (comp.abs() + eps)
-        comp_ref_norm = comp_ref / (comp_ref.abs() + eps)
-        
-        irtf = comp_norm / comp_ref_norm
-
-        feature=torch.cat((irtf.real, irtf.imag), dim=1)
-        
-        
-        # (B, 2*(C-1), F, T), (B, F, T)
-        # (B, 6, 129, 501)
-        return feature, vad_frame
 
         
     def forward(self, mixed, vad, azi_list):
 
-        # block_stft, block_vad_frame = self.data_proc.make_block(mixed, vad)
-        # ibRTF, vad_block = self.data_proc.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, num_spk, n)
-
-        embedding, vad_block = self.irtf_feature(mixed, vad)
+        block_stft, block_vad_frame = self.data_proc.make_block(mixed, vad)
+        ibRTF, vad_block = self.data_proc.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, num_spk, n)
 
         if self.use_scl:
             z, embedding, azi_list, vad_block = self.scl_model(mixed, vad, azi_list)
-            # embedding_s, embedding_t = embedding, embedding
-            # embedding_s = embedding_s.unsqueeze(1)   # (B, 1, 256, n)
-            # embedding_t = embedding_t.unsqueeze(1)
+            embedding_s, embedding_t = embedding, embedding
+            embedding_s = embedding_s.unsqueeze(1)   # (B, 1, 256, n)
+            embedding_t = embedding_t.unsqueeze(1)
         else:
             embedding = ibRTF   # (B, 2(C-1), F, n)
 
 
-
-        out, emb =self.crn(embedding.unsqueeze(1)) # (B, 3, 360, n)
+        out=self.crn(embedding) # (B, 3, 360, n)
 
         target=self.make_target(vad_block, azi_list)   # (B, 3, 360, n)
 
         
-        return out, target, vad_block, embedding
+        return out, target, vad_block
 
 

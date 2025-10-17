@@ -242,7 +242,7 @@ class base_data_maker(datamake):
             if azimuth_deg == 360:
                 speech_wav = np.zeros_like(speech_wav)
             
-            # speech_wav = speech_wav * vad_out
+            speech_wav = speech_wav * vad_out
 
             speech_rir = speech_rirs[spk_num]       
             self.speech_rir_peak = self.rir_peak_find(speech_rir)

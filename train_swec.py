@@ -466,12 +466,36 @@ class Trainer():
                 outputs, embedding, speech_azi, vad_block = self.model(mixed, vad, speech_azi)
                 
                 loss=self.learner.test_update(outputs, speech_azi, vad_block)
-                    
+                
+                # Accumulate embeddings for alignment/uniformity evaluation
+                # Use the last output layer for evaluation
+                if len(outputs) > 0:
+                    last_output = outputs[-1]  # (B, 128, n)
+                    self.embedding_accumulator.add_batch(
+                        embeddings=last_output, 
+                        labels=speech_azi, 
+                        vad_mask=vad_block.squeeze(1),  # Remove middle dimension
+                        evaluator=self.embedding_evaluator
+                    )
                     
                 self.logger.test_iter_log(loss)
                 self.learner.memory_delete([mixed, vad, speech_azi, white_snr, coherent_snr, rt60, outputs, loss, embedding, vad_block])
                 gc.collect()
              
+            # Evaluate accumulated embeddings
+            embedding_metrics = self.embedding_accumulator.evaluate(self.embedding_evaluator)
+            
+            # Log embedding metrics
+            try:
+                if not np.isnan(embedding_metrics['alignment']):
+                    wandb.log({'test_alignment': embedding_metrics['alignment']})
+                if not np.isnan(embedding_metrics['uniformity']):
+                    wandb.log({'test_uniformity': embedding_metrics['uniformity']})
+            except:
+                None
+                
+            print(f"Epoch {epoch} - Alignment: {embedding_metrics['alignment']:.4f}, Uniformity: {embedding_metrics['uniformity']:.4f}")
+            
             self.logger.test_epoch_log(self.optimizer_scheduler)
             
             

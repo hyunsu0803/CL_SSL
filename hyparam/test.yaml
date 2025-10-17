@@ -9,12 +9,12 @@ local_maximum_distance: 20
 SCL: True
 finetune: True
 
-model_for_finetune: ./results/0901_MeanNegDynamicMargin_DOA/model_checkpoint/best_acc_model.tar
+model_for_finetune: ./results_scl_111_doa/model_checkpoint/best_mae_model.tar
 
 result_folder: 
   room_type: ['evaluation']
 
-  inference_folder: './results/0901_MeanNegDynamicMargin_DOA/'
+  inference_folder: './results_scl_111_doa/'
   
 
 

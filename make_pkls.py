@@ -51,7 +51,8 @@ class Dataloader_config():
         
     def config(self):
         
-        self.doa_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
+        # self.doa_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
+        self.doa_maker = Speech_datamake_for_doa(self.args['dataloader']['train'])
         self.scl_maker = Speech_datamake_for_scl(self.args['dataloader']['val']['maker'])
       
         return self.args   

@@ -23,7 +23,7 @@ train:
   mic_type: tetra 
   mic_num: 4 
   max_n_mic: 4 
-  max_spk: 3
+  max_spk: 2
   speech_least_chunk_size: 32000
   duration: 64000 # 4s
 
@@ -117,7 +117,7 @@ val:
     mic_type: tetra 
     mic_num: 4 
     max_n_mic: 4 
-    max_spk: 3
+    max_spk: 2
     speech_least_chunk_size: 32000
     duration: 64000 # 4s
 

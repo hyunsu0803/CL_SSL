@@ -212,11 +212,11 @@ class Dataloader_config():
 
     
     def config(self):
-        self.args['dataloader']['test']['loader']['pkl_dir'] = './LOCATA_pkl/'
+        self.args['dataloader']['test']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/mini_train/'
 
-        # self.test_loader = Synth_dataload(self.args['dataloader']['test']['loader'])
+        self.test_loader = Synth_dataload(self.args['dataloader']['test']['loader'])
 
-        self.test_loader = Real_dataload(self.args['dataloader']['test']['loader'])
+        # self.test_loader = Real_dataload(self.args['dataloader']['test']['loader'])
        
         return self.args
     
@@ -244,8 +244,8 @@ class Tester():
     
     def run(self, ):
       
-        self.test_RD(0)
-        # self.test_SD(0)
+        # self.test_RD(0)
+        self.test_SD(0)
 
     
     def plot_out_target(self, out, target, pkl_idx):
