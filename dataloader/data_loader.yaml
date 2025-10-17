@@ -15,9 +15,9 @@ train:
   degree_resolution: 1
 
   dataloader_dict:
-    batch_size: 
+    batch_size: 1
     shuffle: True
-    num_workers: 
+    num_workers: 1
     drop_last: False
 
   mic_type: tetra 
@@ -27,7 +27,7 @@ train:
   speech_least_chunk_size: 32000
   duration: 64000 # 4s
 
-  SNR: [5, 30]      # coherent noise
+  SNR: [-10, 30]      # coherent noise
   spk_SNR: [-5, 5]  # multi-speaker
   white_noise_snr: [5, 30]
   normalize_factor: [0.004, 1.0]  # white noise
@@ -82,7 +82,7 @@ val:
 
     dataloader_dict:        # essential for real DataLoader
       batch_size: 
-      shuffle: True
+      shuffle: False
       num_workers: 
       drop_last: False
 
@@ -101,7 +101,7 @@ val:
     vad_dir: ./SSL_src/prepared/vad/test-clean/
     
     speech_csv: test_librispeech.csv
-    noise_csv: val_noise.csv
+    noise_csv: test_noise.csv
     
     
     # num_spk: 1  # for real DataLoader
@@ -110,7 +110,7 @@ val:
 
     dataloader_dict:
       batch_size: 1 
-      shuffle: True
+      shuffle: False
       num_workers: 1
       drop_last: True
 
@@ -121,7 +121,7 @@ val:
     speech_least_chunk_size: 32000
     duration: 64000 # 4s
 
-    SNR: [5, 30]      # coherent noise
+    SNR: [-10, 30]      # coherent noise
     spk_SNR: [-5, 5]  # multi-speaker
     white_noise_snr: [5, 30]
     normalize_factor: [0.004, 1.0]  # white noise

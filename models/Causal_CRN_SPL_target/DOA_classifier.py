@@ -235,9 +235,10 @@ class main_model_for_doa(nn.Module):
 
         if self.use_scl:
             z, embedding, azi_list, vad_block = self.scl_model(mixed, vad, azi_list)
-            embedding_s, embedding_t = embedding, embedding
-            embedding_s = embedding_s.unsqueeze(1)   # (B, 1, 256, n)
-            embedding_t = embedding_t.unsqueeze(1)
+            # embedding_s, embedding_t = embedding, embedding
+            # embedding_s = embedding_s.unsqueeze(1)   # (B, 1, 256, n)
+            # embedding_t = embedding_t.unsqueeze(1)
+            embedding = embedding.unsqueeze(1)
         else:
             embedding = ibRTF   # (B, 2(C-1), F, n)
 

@@ -13,8 +13,10 @@ import soundfile as sf
 fft_config = {
     'win_len': 256,
     'win_inc': 128,
-    'fft_len': 718,
-    # 'fft_len': 256,
+    # 'fft_len': 60,
+    # 'fft_len': 360,
+    # 'fft_len': 718,
+    'fft_len': 256,
     'vad_threshold': 0.6666,
 }
 stft_model=ConvSTFT(**fft_config).to('cuda' if torch.cuda.is_available() else 'cpu')
@@ -81,9 +83,33 @@ def make_target(vad_frame, azi):
     return target
 
 
+def _get_gcc(mixed, vad):     
+    device = mixed.device
+    
+    r, i, vad_frame =stft_model(mixed, vad, cplx=True)
+    comp = torch.complex(r, i)  # C x F x T
+    comp = comp[:, :31, :] 
+    linear_spectra = comp.permute(2, 1, 0)   # T x F x C
+    
+    gcc_feat = []
+    for m in range(linear_spectra.shape[-1]):
+        for n in range(m+1, linear_spectra.shape[-1]):
+            R = torch.conj(linear_spectra[:, :, m]) * linear_spectra[:, :, n]        
+            cc = torch.fft.irfft(torch.exp(1.j*torch.angle(R)), dim=-1)      # (T, 2*(F-1)) (501, 360)
+            # cc.shape # (T, 2*(F-1)) (501, 360)
+            gcc_feat.append(cc)
+    
+    gcc_feat = torch.stack(gcc_feat, dim=-1)      
+    gcc_feat = gcc_feat.permute(2, 1, 0)         # (6, 360, 501)
+
+    return gcc_feat, vad_frame
+
+
 if __name__ == '__main__':
 
-    pkl_list = glob("SSL_src/prepared/pkl/doa/*.pkl")
+    pkl_list = glob("SSL_src/prepared/pkl/mini_val/*.pkl")
+
+     
 
     for pkl_name in tqdm(pkl_list):
 
@@ -99,33 +125,55 @@ if __name__ == '__main__':
         vad = vad.to('cuda' if torch.cuda.is_available() else 'cpu')
         azi = azi.to('cuda' if torch.cuda.is_available() else 'cpu')
 
-        irtf, vad_frame = irtf_feature(mixed, vad)
-        target = make_target(vad_frame, azi.unsqueeze(0))  
+
+        
+        gcc, vad_frame = _get_gcc(mixed, vad)
+        gcc = gcc.cpu().numpy()  # (6, 360, 501)
+        gcc_name = pkl_name.split('/')[-1].replace('.pkl', '.npy')
+        gcc_path = os.path.join("SSL_src/prepared", 'gcc_val_60', gcc_name)
+        os.makedirs(os.path.dirname(gcc_path), exist_ok=True)
+        np.save(gcc_path, gcc)  
 
 
-        target = target.cpu().numpy()
-        target_name = pkl_name.split('/')[-1].replace('.pkl', '.npy')
-        target_path = os.path.join("SSL_src/prepared", 'clean', target_name)
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        np.save(target_path, target[0,2])
-
-        irtf = irtf.cpu().numpy()
-        irtf_name = pkl_name.split('/')[-1].replace('.pkl', '.npy')
-        irtf_path = os.path.join("SSL_src/prepared", 'noisy', irtf_name)
-        os.makedirs(os.path.dirname(irtf_path), exist_ok=True)
-        np.save(irtf_path, irtf)
+        # irtf, vad_frame = irtf_feature(mixed, vad)
+        # target = make_target(vad_frame, azi.unsqueeze(0))  
 
 
-        ##### save target as png
-        png_name = pkl_name.split('/')[-1].replace('.pkl', '.png')
-        png_path = os.path.join("SSL_src/prepared", 'target_pngs', png_name)
-        os.makedirs(os.path.dirname(png_path), exist_ok=True)
-        plt.figure()
-        plt.imshow(target[0,1], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
-        plt.xlabel('Time frame')
-        plt.ylabel('Source angle')
-        plt.title('Target DOA spatial spectrum')
-        plt.tight_layout()
-        plt.savefig(png_path, dpi=300)
-        plt.close()
+        # target = target.cpu().numpy()
+        # target = target[:, 2, :, :]  # (1, 3, 360, 501) -> (1, 360, 501)
+        # target_name = pkl_name.split('/')[-1].replace('.pkl', '.npy')
+        # target_path = os.path.join("SSL_src/prepared", 'target_test_cleaned', target_name)
+        # os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        # np.save(target_path, target)
+
+        # irtf = irtf.cpu().numpy()
+        # irtf_name = pkl_name.split('/')[-1].replace('.pkl', '.npy')
+        # irtf_path = os.path.join("SSL_src/prepared", 'noisy', irtf_name)
+        # os.makedirs(os.path.dirname(irtf_path), exist_ok=True)
+        # np.save(irtf_path, irtf)
+
+
+        # ##### save target as png
+        # png_name = pkl_name.split('/')[-1].replace('.pkl', '.png')
+        # png_path = os.path.join("SSL_src/prepared", 'target_pngs', png_name)
+        # os.makedirs(os.path.dirname(png_path), exist_ok=True)
+        # plt.figure()
+        # plt.imshow(target[0,1], aspect='auto', vmin=0.0, vmax=1.0, interpolation='nearest')
+        # plt.xlabel('Time frame')
+        # plt.ylabel('Source angle')
+        # plt.title('Target DOA spatial spectrum')
+        # plt.tight_layout()
+        # plt.savefig(png_path, dpi=300)
+        # plt.close()
+
+        # r, i, vad_frame =stft_model(mixed, vad, cplx=True)
+
+        # r = r.cpu().numpy()             # C x F x T = (4, 360, 501)
+        # i = i.cpu().numpy()
+        # stft_name = pkl_name.split('/')[-1].replace('.pkl', '.npy')
+        # stft_path = os.path.join("SSL_src/prepared", 'stft_valid', stft_name)
+        # os.makedirs(os.path.dirname(stft_path), exist_ok=True)
+        # np.save(stft_path, np.stack((r, i), axis=0).reshape(-1, 360, 501))    # (2, 4, 360, 501)
+
+
 

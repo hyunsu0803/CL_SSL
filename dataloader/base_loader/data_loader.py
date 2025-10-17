@@ -50,6 +50,8 @@ class synth_data_loader(datamake):
         # does nothing when 'ans_azi'== 0
         # become torch.tensor
         vad, azi_list = self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)   
+
+        coherent_snr = 0
         
         return torch.from_numpy(mixed), vad, azi_list, white_snr, coherent_snr, rt60
     
@@ -61,7 +63,7 @@ class real_data_loader(datamake):
         
         self.args=args
         
-        self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/*/*.pkl')
+        self.pkl_list = glob('/root/clssl/LOCATA_pkl/**/*.pkl')
         # self.pkl_list = glob('/root/clssl/STARSS23/mic_dev_pkl/dev-train-tau/*.pkl') + glob('/root/clssl/STARSS23/mic_dev_pkl/dev-test-tau/*.pkl')
 
 

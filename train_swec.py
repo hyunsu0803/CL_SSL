@@ -10,6 +10,7 @@ from tqdm import tqdm
 from dataloader.wrap_dataload import Train_dataload_for_scl, Synth_dataload, Real_dataload
 import pandas as pd
 import gc
+from evaluation.embedding_evaluator import EmbeddingEvaluator, EmbeddingAccumulator
 
 
 
@@ -103,8 +104,10 @@ class Learner_config():
     def init_loss_func(self):
 
         from loss.scl_loss import Weighted_SupConLoss
+        from loss.new_loss import MeanNegDynamicMargin_Loss
         
-        self.loss_func=Weighted_SupConLoss()
+        #self.loss_func=Weighted_SupConLoss()
+        self.loss_func=MeanNegDynamicMargin_Loss()
 
         self.loss_train_map_num=self.args['learner']['loss']['option']['train_map_num']     # [0, 1, 2]
         self.loss_weight=self.args['learner']['loss']['option']['each_layer_weight']
@@ -206,7 +209,7 @@ class Learner_config():
         self.init_optimizer()
         self.init_optimzer_scheduler()
         self.init_loss_func()
-        self.sigma = [0, 3, 9]
+        self.sigma = [0, 0, 0]
         return self.args
 
 
@@ -318,7 +321,7 @@ class Logger_config():
             torch.save(checkpoint, self.model_save_dir + "best_model.tar")
             print("new best model\n")
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar")
-        torch.save(checkpoint,  self.model_save_dir + "epoch_{}.tar".format(epoch))
+        # torch.save(checkpoint,  self.model_save_dir + "epoch_{}.tar".format(epoch))
 
         
         util.util.draw_result_pic(self.png_dir, epoch, self.log_csv['train_epoch_loss'],  self.log_csv['test_epoch_loss'], 'Loss')
@@ -377,6 +380,10 @@ class Trainer():
         self.logger=Logger_config(self.args)
         self.args=self.logger.config()
         
+        # Initialize embedding evaluator
+        self.embedding_evaluator = EmbeddingEvaluator(alpha=2, t=2)
+        self.embedding_accumulator = EmbeddingAccumulator(max_samples=10000)
+        
         self.stage0 = 0
         self.stage1 = 50
         self.stage2 = 100
@@ -412,17 +419,9 @@ class Trainer():
 
         torch.cuda.empty_cache()
         
-        if epoch < self.stage2:
-            self.n_room = 0
-        else:
-            self.n_room = 8
-        
-        if epoch == self.stage2:
-            print('stage1 : contrast room selection')
-        self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
             
-        # self.n_room = 0
-        # self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
+        self.n_room = 1
+        self.dataloader.train_loader.dataset.random_room_speech_select(self.n_room)
         for iter_num, (mixed, vad, speech_azi, speech_ele, white_snr, coherent_snr, rt60) in enumerate(tqdm(self.dataloader.train_loader, desc='Train {}'.format(epoch), total=len(self.dataloader.train_loader), )):
 
             mixed = mixed[0].to(self.hyperparameter.device)
@@ -444,12 +443,13 @@ class Trainer():
         self.logger.train_epoch_log()
         
 
- 
     def validation(self, epoch):
         self.model.eval()
         
         torch.cuda.empty_cache()
         
+        # Reset embedding accumulator for this epoch
+        self.embedding_accumulator.reset()
 
         with torch.no_grad():
             

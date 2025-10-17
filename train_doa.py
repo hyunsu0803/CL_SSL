@@ -391,9 +391,11 @@ class Dataloader_config():
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
         self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 8
         self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/doa/'
+        # self.args['dataloader']['train']['pkl_dir'] = './SSL_src/prepared/pkl/temp_train/'
         
         self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
         # self.val_loader=Real_dataload(self.args['dataloader']['val']['loader'])
+        # self.train_loader=Synth_dataload(self.args['dataloader']['train'])
         self.val_loader=Synth_dataload(self.args['dataloader']['val']['loader'])
         
         return self.args   

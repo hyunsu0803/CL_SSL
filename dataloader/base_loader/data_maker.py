@@ -242,6 +242,7 @@ class base_data_maker(datamake):
             if azimuth_deg == 360:
                 speech_wav = np.zeros_like(speech_wav)
             
+            # speech_wav = speech_wav * vad_out
 
             speech_rir = speech_rirs[spk_num]       
             self.speech_rir_peak = self.rir_peak_find(speech_rir)
@@ -519,12 +520,12 @@ class speech_data_maker_for_doa(base_data_maker):
         # print('speech_csv', self.args['speech_csv'])
         # print('noise_csv', self.args['noise_csv'])
         
-        self.pkl_dir = './SSL_src/prepared/pkl/doa/'
+        self.pkl_dir = './SSL_src/prepared/pkl/train/'
         os.makedirs(self.pkl_dir, exist_ok=True)
         
         
     def save_data(self, idx):
-        mixed, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx, with_coherent_noise=True)
+        mixed, vad, azi_list, ele_list, white_snr, coherent_snr, rt60 = self.make_data(idx, with_coherent_noise=False)
         
         save_dict={}
         save_dict['mixed']=mixed    # tensor
