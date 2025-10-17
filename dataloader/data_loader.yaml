@@ -15,15 +15,15 @@ train:
   degree_resolution: 1
 
   dataloader_dict:
-    batch_size: 
+    batch_size: 1
     shuffle: True
-    num_workers: 
+    num_workers: 1
     drop_last: False
 
   mic_type: tetra 
   mic_num: 4 
   max_n_mic: 4 
-  max_spk: 3
+  max_spk: 2
   speech_least_chunk_size: 32000
   duration: 64000 # 4s
 
@@ -82,7 +82,7 @@ val:
 
     dataloader_dict:        # essential for real DataLoader
       batch_size: 
-      shuffle: True
+      shuffle: False
       num_workers: 
       drop_last: False
 
@@ -101,7 +101,7 @@ val:
     vad_dir: ./SSL_src/prepared/vad/test-clean/
     
     speech_csv: test_librispeech.csv
-    noise_csv: val_noise.csv
+    noise_csv: test_noise.csv
     
     
     # num_spk: 1  # for real DataLoader
@@ -110,14 +110,14 @@ val:
 
     dataloader_dict:
       batch_size: 1 
-      shuffle: True
+      shuffle: False
       num_workers: 1
       drop_last: True
 
     mic_type: tetra 
     mic_num: 4 
     max_n_mic: 4 
-    max_spk: 3
+    max_spk: 2
     speech_least_chunk_size: 32000
     duration: 64000 # 4s
 

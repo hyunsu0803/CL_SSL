@@ -6,20 +6,24 @@ import tqdm
 
 class PreProcessor():
     def __init__(self):
-        self.train_dir=
-        self.test_dir=
+        # self.train_dir=
+        # self.test_dir=
+        self.val_dir='LibriSpeech/dev-clean'
 
-        self.metadata_dir='../metadata/'
+        self.metadata_dir='SSL_src/preprocess/metadata/'
         train_file='librispeech_train.csv'
         test_file='librispeech_test.csv'
+        val_file='librispeech_val.csv'
 
-        self.make_csv(self.metadata_dir+train_file, self.train_dir)
-        self.make_csv(self.metadata_dir+test_file, self.test_dir)
+        # self.make_csv(self.metadata_dir+train_file, self.train_dir)
+        # self.make_csv(self.metadata_dir+test_file, self.test_dir)
+        self.make_csv(self.metadata_dir+val_file, self.val_dir)
+
 
     def make_csv(self, save_dir, audio_dir):
 
         # dir + speaker_id + chaper_id + wav_name
-        column_names=['file_path', 'duration', 'speaker_id']
+        column_names=['audio_path', 'duration', 'speaker_id']
         csv_dict={}
 
         for column in column_names:

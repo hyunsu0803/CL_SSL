@@ -50,6 +50,8 @@ class synth_data_loader(datamake):
         # does nothing when 'ans_azi'== 0
         # become torch.tensor
         vad, azi_list = self.multi_ans(vad, azi_list, self.ans_azi, self.degree_resolution)   
+
+        coherent_snr = 0
         
         return torch.from_numpy(mixed), vad, azi_list, white_snr, coherent_snr, rt60
     

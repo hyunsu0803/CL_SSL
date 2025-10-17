@@ -51,7 +51,8 @@ class Dataloader_config():
         
     def config(self):
         
-        self.doa_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
+        # self.doa_maker = Speech_datamake_for_doa(self.args['dataloader']['val']['maker'])
+        self.doa_maker = Speech_datamake_for_doa(self.args['dataloader']['train'])
         self.scl_maker = Speech_datamake_for_scl(self.args['dataloader']['val']['maker'])
       
         return self.args   
@@ -82,7 +83,7 @@ class Trainer():
     def validation_for_scl(self, epoch):
 
         with torch.no_grad():
-            n_room = 0
+            n_room = 1
             self.dataloader.scl_maker.dataset.random_room_speech_select(n_room)
             for iter_num, (a, b, c, d) in enumerate(tqdm(self.dataloader.scl_maker , desc='Test', total=len(self.dataloader.scl_maker), )):
                 self.dataloader.scl_maker.dataset.random_room_speech_select(n_room)

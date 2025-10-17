@@ -212,8 +212,11 @@ class Dataloader_config():
 
     
     def config(self):
-        # self.test_loader = Synth_dataload(self.args['dataloader']['test']['loader'])
-        self.test_loader = Real_dataload(self.args['dataloader']['test']['loader'])
+        self.args['dataloader']['test']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/mini_train/'
+
+        self.test_loader = Synth_dataload(self.args['dataloader']['test']['loader'])
+
+        # self.test_loader = Real_dataload(self.args['dataloader']['test']['loader'])
        
         return self.args
     
@@ -241,8 +244,8 @@ class Tester():
     
     def run(self, ):
       
-        self.test_RD(0)
-        # self.test_SD(0)
+        # self.test_RD(0)
+        self.test_SD(0)
 
     
     def plot_out_target(self, out, target, pkl_idx):
@@ -259,9 +262,9 @@ class Tester():
         plt.xlabel('Time frame')
         plt.ylabel('Source angle')
         plt.title('Target DOA spatial spectrum')
-        os.makedirs(self.logger.result_folder['inference_folder'] + '/pngs/' + pkl_idx.split('/')[-2] + '/', exist_ok=True)
+        os.makedirs(self.logger.result_folder['inference_folder'] + '/pngs/', exist_ok=True)
         plt.tight_layout()
-        plt.savefig(self.logger.result_folder['inference_folder'] + '/pngs/' + pkl_idx.split('/')[-2] + '/' + pkl_idx.split('/')[-1].replace('.pkl', '.png'), dpi=600)
+        plt.savefig(self.logger.result_folder['inference_folder'] + '/pngs/' + pkl_idx.split('/')[-1].replace('.pkl', '.png'), dpi=600)
         plt.close()
 
 
@@ -290,7 +293,7 @@ class Tester():
                     # vad_block=vad_block.cpu()           # (B, num_spk, n)
                     
                     pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
-                    # self.plot_out_target(out[0,1], pseudo_target[0,1], pkl_idx)
+                    self.plot_out_target(out[0,2], pseudo_target[0,2], pkl_idx)
 
                     total_argmax_acc, total_softmax_acc, total_half_softmax_acc, \
                         total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, \
@@ -328,36 +331,52 @@ class Tester():
                     vad=vad.to(self.hyperparameter.device)
                     speech_azi=speech_azi.to(self.hyperparameter.device)
 
-                    out, target, vad_block = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n), (B, num_spk, n)
+                    out, target, vad_block, embedding = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n), (B, num_spk, n)
+                    # out = out.repeat_interleave(3, dim=0).unsqueeze(0)
 
-
-                    out=out.sigmoid().detach().cpu()  
-                    target=target.cpu()               
-                    speech_azi=speech_azi.cpu()         # (B, 1)
-                    vad_block=vad_block.cpu()           # (B, num_spk, n)
-                    num_spk = vad_block.sum(axis=1).max()       # (1, )
-                    num_spk = num_spk.item()
+                    # out=out.sigmoid().detach().cpu()  
+                    # target=target.cpu()               
+                    # speech_azi=speech_azi.cpu()         # (B, 1)
+                    # vad_block=vad_block.cpu()           # (B, num_spk, n)
+                    # num_spk = vad_block.sum(axis=1).max()       # (1, )
+                    # num_spk = num_spk.item()
 
                     pkl_idx = self.dataloader.test_loader.dataset.pkl_list[iter_num]
-                    # self.plot_out_target(out[0,1], pseudo_target[0,1], pkl_idx)
+                    # self.plot_out_target(out[0,2], target[0,2], pkl_idx)
 
-                    total_argmax_acc, total_softmax_acc, total_half_softmax_acc, \
-                        total_argmax_doa_error, total_softmax_doa_error,total_half_softmax_doa_error, \
-                            number_of_degrees_to_estimate=metric.mae.calc_mae(out, target, vad_block, num_spk, speech_azi,\
-                                                                        calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
-                                                                            acc_threshold=self.args['hyparam']['acc_threshold'],\
-                                                                                local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
+                    output_name = pkl_idx.split('/')[-1].replace('.pkl', '.npy')
+                    embedding_dir = '/root/clssl/SSL_src/prepared/scl_embedding_train/'
+                    # os.makedirs(embedding_dir, exist_ok=True)
+                    output_path = os.path.join(embedding_dir, output_name)
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    np.save(output_path, embedding.cpu().numpy())
+
+                    # target_name = pkl_idx.split('/')[-1].replace('.pkl', '.npy')
+                    # target_path = os.path.join("results", 'target', target_name)
+                    # os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    # np.save(target_path, target[:, 2].numpy())
+
+                #     (total_argmax_acc, 
+                #      total_softmax_acc, 
+                #      total_half_softmax_acc, 
+                #      total_argmax_doa_error, 
+                #      total_softmax_doa_error,
+                #      total_half_softmax_doa_error, 
+                #      number_of_degrees_to_estimate) = metric.mae.calc_mae(out, target, vad_block, num_spk, speech_azi,\
+                #                                                         calc_layer=self.args['learner']['loss']['option']['train_map_num'],\
+                #                                                             acc_threshold=self.args['hyparam']['acc_threshold'],\
+                #                                                                 local_maximum_distance=self.args['hyparam']['local_maximum_distance'])
 
 
-                    self.logger.error_update(room_type, total_argmax_acc, total_softmax_acc,total_half_softmax_acc, 
-                                             total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error,
-                                             number_of_degrees_to_estimate)
+                #     self.logger.error_update(room_type, total_argmax_acc, total_softmax_acc,total_half_softmax_acc, 
+                #                              total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error,
+                #                              number_of_degrees_to_estimate)
 
                     
-                    self.learner.memory_delete([mixed, vad, speech_azi, out, target, vad_block, total_argmax_acc, total_softmax_acc, total_half_softmax_acc,
-                                             total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error, number_of_degrees_to_estimate])
+                #     self.learner.memory_delete([mixed, vad, speech_azi, out, target, vad_block, total_argmax_acc, total_softmax_acc, total_half_softmax_acc,
+                #                              total_argmax_doa_error, total_softmax_doa_error, total_half_softmax_doa_error, number_of_degrees_to_estimate])
                   
-                self.logger.save_output(room_type)
+                # self.logger.save_output(room_type)
 
             break
 

@@ -169,12 +169,43 @@ class main_model_for_scl(nn.Module):
         self.crn=crn(self.config['CRN'])
 
 
+    
+    def irtf_feature(self, mixed, vad):  
+
+        ref_ch = 0
+        eps = np.finfo(np.float32).eps
+
+        # mixed = mixed.unsqueeze(0)  # (1, C, T)
+        # vad = vad.unsqueeze(0)      # (1, T)
+
+        r, i, vad_frame = self.stft_model(mixed, vad, cplx=True)
+        # B x C x F x T = (B, 4, 513, 345)
+        comp = torch.complex(r, i)
+
+        
+        comp_ref = comp[..., [ref_ch], :, :]
+        comp=torch.cat((comp[..., ref_ch-1:ref_ch, :, :], comp[..., ref_ch+1:, :, :]), dim=-3)
+
+        comp_norm = comp / (comp.abs() + eps)
+        comp_ref_norm = comp_ref / (comp_ref.abs() + eps)
+        
+        irtf = comp_norm / comp_ref_norm
+
+        feature=torch.cat((irtf.real, irtf.imag), dim=1)
+        
+        
+        # (B, 2*(C-1), F, T), (B, F, T)
+        # (B, 6, 129, 501)
+        return feature, vad_frame
+
+
         
     def forward(self, mixed, vad, azi_list):
 
-        mixed, _, vad, azi_list = self.data_proc.permute_data(mixed, None, vad, azi_list)
-        block_stft, block_vad_frame = self.data_proc.make_block(mixed, vad)
-        ibRTF, vad_block = self.data_proc.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, n)
+        # mixed, _, vad, azi_list = self.data_proc.permute_data(mixed, None, vad, azi_list)
+        # block_stft, block_vad_frame = self.data_proc.make_block(mixed, vad)
+        # ibRTF, vad_block = self.data_proc.ib_RTF(block_stft, block_vad_frame)      # (B, 2(C-1), F, n), (B, n)
+        ibRTF, vad_block = self.irtf_feature(mixed, vad)
 
         outputs, embedding = self.crn(ibRTF)    # (B, n, 128), (B, 256, n)
         

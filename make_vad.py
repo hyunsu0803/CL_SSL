@@ -23,7 +23,8 @@ def _cleanSilences(s, vad_tool, fs, aggressiveness, return_vad=False):
 
 
 def make_speech_vad(vad_tool, wav_folder, vad_folder):
-    key_list = ['train-clean-100', 'test-clean']
+    # key_list = ['train-clean-100', 'test-clean']
+    key_list = ['dev-clean']
 
     for key in key_list:
 
@@ -63,11 +64,13 @@ if __name__=='__main__':
     wav_folder=dict()
     wav_folder['train-clean-100'] = "/root/clssl/LibriSpeech/train-clean-100/"
     wav_folder['test-clean'] = "/root/clssl/LibriSpeech/test-clean/"
+    wav_folder['dev-clean'] = "/root/clssl/LibriSpeech/dev-clean/"
     
 
     vad_folder=dict()
     vad_folder['train-clean-100'] = "/root/clssl/SSL_src/prepared/vad/train-clean-100/"
     vad_folder['test-clean'] = "/root/clssl/SSL_src/prepared/vad/test-clean/"
+    vad_folder['dev-clean'] = "/root/clssl/SSL_src/prepared/vad/dev-clean/"
     
     
     make_speech_vad(vad_tool, wav_folder, vad_folder)

@@ -365,7 +365,7 @@ class Logger_config():
 
 
         torch.save(checkpoint,  self.model_save_dir + "last_model.tar")
-        # torch.save(checkpoint,  self.model_save_dir + "epoch_{}.tar".format(epoch))
+        torch.save(checkpoint,  self.model_save_dir + "epoch_{}.tar".format(epoch))
 
         util.util.draw_metric_pic(self.log_png_dir, epoch, self.log_csv['train_epoch_loss'],  self.log_csv['test_epoch_mae'], self.log_csv['test_epoch_acc'])
 
@@ -386,12 +386,12 @@ class Dataloader_config():
         
     def config(self):
 
-        self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 2
-        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 1
+        self.args['dataloader']['train']['dataloader_dict']['batch_size'] = 64
+        self.args['dataloader']['train']['dataloader_dict']['num_workers'] = 8
         self.args['dataloader']['val']['loader']['dataloader_dict']['batch_size'] = 1
-        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 1
-        self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/val/'
-        self.args['dataloader']['train']['pkl_dir'] = './SSL_src/prepared/pkl/train/'
+        self.args['dataloader']['val']['loader']['dataloader_dict']['num_workers'] = 8
+        self.args['dataloader']['val']['loader']['pkl_dir'] = './SSL_src/prepared/pkl/temp_val/'
+        self.args['dataloader']['train']['pkl_dir'] = './SSL_src/prepared/pkl/temp_train/'
         
         # self.train_loader=Train_dataload_for_doa(self.args['dataloader']['train'], self.args['hyparam']['randomseed'])
         # self.val_loader=Real_dataload(self.args['dataloader']['val']['loader'])
@@ -463,10 +463,6 @@ class Trainer():
             
             
             out, target, vad_block = self.model(mixed, vad, speech_azi)
-
-            out = out.unsqueeze(1).repeat_interleave(3, dim=1)
-            target[:, 0, :, :] = target[:, 2, :, :]
-            target[:, 1, :, :] = target[:, 2, :, :]
             
             loss = self.learner.train_update(out, target)
                 
@@ -497,10 +493,6 @@ class Trainer():
                 speech_azi=speech_azi.to(self.hyperparameter.device)
 
                 out, target, vad_block = self.model(mixed, vad, speech_azi)    # (B, 3, 360, n), (B, num_spk, n)
-
-                out = out.repeat_interleave(3, dim=0).unsqueeze(0)
-                target[:, 0, :, :] = target[:, 2, :, :]
-                target[:, 1, :, :] = target[:, 2, :, :]
 
                 out=out.sigmoid().detach().cpu()  
                 target=target.cpu()               
